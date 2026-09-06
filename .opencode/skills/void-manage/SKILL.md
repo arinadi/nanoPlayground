@@ -24,15 +24,15 @@ glibc >= 2.28) — never suggest `musl`-only tricks.
 
 Image ini punya CLI `npg` — SATU panggilan menggantikan banyak shell:
 
-- `npg commands [--json]` — discovery semua perintah (mulai dari sini)
+- `npg commands [--json]` — discover every command (start here)
 - `npg sys info` — OS, PID1, versi tools, jumlah service (1 panggilan)
 - `npg pkg update | add <p..> | search <pola> | rm <p> | clean`
 - `npg svc status|enable|disable|run` — runit + deteksi container otomatis
 - `npg skills sync|list` — pasang skill ke semua harness agent
 
-`npg` menolak jalan di non-Void (guard `xbps`), jadi aman dari salah host.
+`npg` refuses to run on non-Void (guarded by `xbps`), so the wrong host stays safe.
 
-## Hard rules (bila `npg` tak tersedia)
+## Hard rules (when `npg` is unavailable)
 
 - NEVER use `apt`, `apt-get`, `dnf`, `apk`, `pacman`, `systemctl`, `service`.
   Only `xbps-install`, `xbps-query`, `xbps-remove`, `xbps-reconfigure`, `sv`.

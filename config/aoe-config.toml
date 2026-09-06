@@ -1,14 +1,14 @@
-# Default config untuk nanoPlayground.
-# Docker-in-Docker/sandbox TIDAK diaktifkan — image ini SENDIRI sudah
-# menjadi "sandbox"-nya (kontainer), jadi tidak perlu aoe membuat container
-# lagi di dalam container (apalagi kalau host-nya jalan lewat proot,
-# yang biasanya tidak punya Docker/Podman daemon sama sekali).
+# Default config for nanoPlayground.
+# Docker-in-Docker/sandbox is NOT enabled — this image ITSELF already is the
+# "sandbox" (a container), so aoe must not spawn another container inside
+# (especially when the host runs via proot, which usually has no
+# Docker/Podman daemon at all).
 
 [sandbox]
 enabled_by_default = false
 
 [session]
-# Set ke true kalau mau semua sesi baru otomatis skip permission-prompt
-# (setara --dangerously-skip-permissions / opencode auto-approve).
-# Defaultnya false = tetap ada approval prompt seperti biasa.
+# Set to true to auto-skip permission prompts for all new sessions
+# (equivalent of --dangerously-skip-permissions / opencode auto-approve).
+# Default false = keep the approval prompts as usual.
 yolo_mode_default = false

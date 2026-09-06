@@ -1,31 +1,34 @@
 # nanoPlayground
 
-> `docker run -it --rm ghcr.io/arinadi/nanoplayground` — langsung masuk TUI,
-> tanpa `-v` / `-e` wajib.
+> **Instant, Fun & Agentic Playground for AI coding agents.**
+> The disposable playground for the age of agents — spin it up, vibe through
+> every task, throw it away.
+>
+> `docker run -it --rm ghcr.io/arinadi/nanoplayground` — straight into the
+> TUI, no `-v` / `-e` required.
 
-Docker image siap pakai: begitu `docker run`, langsung masuk TUI [Agent of
-Empires (aoe)](https://www.agent-of-empires.com/) dengan **Claude Code** dan
-**OpenCode** sudah terpasang. Skill, MCP, dan provider dikelola lewat menu
-`aoe` sendiri (tekan `m` untuk MCP, lihat dokumentasi per-agent untuk
-skill/provider), jadi tidak perlu edit file config manual lagi.
+A ready-to-run Docker image: one `docker run` drops you into the
+[Agent of Empires (aoe)](https://www.agent-of-empires.com/) TUI with
+**Claude Code** and **OpenCode** preinstalled. Skills, MCPs, and providers
+are managed through `aoe` itself (press `m` for MCP, see each agent's docs
+for skills/providers) — no manual config-file editing needed.
 
-Container jalan sebagai **user non-root `admin`**, bukan root. Docker
-sandbox (fitur `aoe` yang membuat container *di dalam* container) juga
-**dimatikan secara default** lewat `config/aoe-config.toml` — cocok untuk
-dijalankan di proot, di mana biasanya tidak ada Docker/Podman daemon sama
-sekali.
+The container runs as the **non-root user `admin`**, not root. Docker
+sandboxing (the `aoe` feature that spawns containers *inside* the container)
+is **disabled by default** via `config/aoe-config.toml` — ideal for proot
+environments, where there is usually no Docker/Podman daemon at all.
 
-## Pakai dari GHCR (tanpa build)
+## Use from GHCR (no build)
 
 ```bash
 docker run -it --rm ghcr.io/arinadi/nanoplayground
 ```
 
-Tanpa params pun jalan: config dir dibuat otomatis, `ANTHROPIC_API_KEY`
-yang kosong cuma warning. Tanpa `-it` (misal di CI), container cetak versi
-lalu exit 0 alih-alih hang di TUI.
+It runs with zero params: config dirs are created automatically, a missing
+`ANTHROPIC_API_KEY` is just a warning. Without `-it` (e.g. in CI), the
+container prints versions and exits 0 instead of hanging in the TUI.
 
-Persistensi opsional — tambah kalau perlu:
+Optional persistence — add when you need it:
 
 ```bash
 docker run -it --rm \
@@ -37,16 +40,16 @@ docker run -it --rm \
   ghcr.io/arinadi/nanoplayground
 ```
 
-> Image GHCR selalu lowercase: `ghcr.io/arinadi/nanoplayground`.
+> GHCR images are always lowercase: `ghcr.io/arinadi/nanoplayground`.
 
 ## Build
 
-Base tunggal: **Void Linux glibc-full** (rolling, kecil, `glibc` agar binary
-`aoe` yang butuh glibc >= 2.28 jalan).
+Single base: **Void Linux glibc-full** (rolling, small, `glibc` so the `aoe`
+binary with its glibc >= 2.28 requirement runs).
 
-Samakan `USER_UID`/`USER_GID` dengan user host kamu (`id -u` / `id -g`)
-supaya file yang dibuat lewat bind-mount `/workspace` tidak jadi milik UID
-asing yang cuma bisa diutak-atik lewat `sudo`:
+Match `USER_UID`/`USER_GID` to your host user (`id -u` / `id -g`) so files
+created through the `/workspace` bind-mount aren't owned by a foreign UID
+you can only touch via `sudo`:
 
 ```bash
 docker build \
@@ -55,10 +58,9 @@ docker build \
   -t nanoplayground .
 ```
 
-Kalau `id -u` kamu di host adalah `0` (misal proot yang selalu bertindak
-sebagai root), tetap boleh pakai default `USER_UID=1000` — container-nya
-tetap non-root, cuma UID di /workspace jadi 1000 dan kamu akses lewat host
-sebagai root biasa.
+If your host `id -u` is `0` (e.g. proot, which always acts as root), keeping
+the default `USER_UID=1000` is fine — the container stays non-root, only the
+UID on /workspace is 1000, which you access from the host as root anyway.
 
 ## Run
 
@@ -72,68 +74,70 @@ docker run -it --rm \
   nanoplayground
 ```
 
-Penjelasan mount:
+Mounts explained:
 
-| Host path                     | Guna                                                |
-| ------------------------------ | ---------------------------------------------------- |
-| `$PWD` -> `/workspace`         | Project yang mau dikerjakan agent                    |
-| `~/.claude`                    | Kredensial & history Claude Code, persist antar run   |
-| `~/.config/opencode`           | Config & provider OpenCode, persist antar run         |
-| `~/.agent-of-empires`          | Config `aoe` (sessions, profiles), persist antar run  |
+| Host path                     | Purpose                                           |
+| ------------------------------ | ------------------------------------------------- |
+| `$PWD` -> `/workspace`         | Project the agent works on                        |
+| `~/.claude`                    | Claude Code credentials & history, persists       |
+| `~/.config/opencode`           | OpenCode config & providers, persists             |
+| `~/.agent-of-empires`          | `aoe` config (sessions, profiles), persists       |
 
-Tanpa mount config di atas, tiap `docker run` = login/setup provider dari
-nol lagi. Sekali mount, kamu edit config lewat menu TUI `aoe` / `claude` /
-`opencode` seperti biasa, dan itu otomatis nempel di host.
+Without the config mounts above, every `docker run` means logging in /
+setting up providers from scratch. Mount once, then edit config through the
+`aoe` / `claude` / `opencode` TUI menus as usual — it sticks on the host.
 
-> Kalau direktori host (`~/.claude` dll.) belum ada / masih kosong dan
-> dimiliki root dari percobaan sebelumnya, jalankan
+> If the host dirs (`~/.claude` etc.) don't exist yet / are empty and owned
+> by root from an earlier attempt, run
 > `sudo chown -R $(id -u):$(id -g) ~/.claude ~/.config/opencode ~/.agent-of-empires`
-> di host dulu supaya user `admin` di dalam container bisa menulis ke situ.
+> on the host first so the `admin` user inside the container can write there.
 
 ### Auto-run TUI
 
-Default `CMD` kosong -> entrypoint langsung `exec aoe`, jadi begitu
-container start kamu langsung di layar TUI. Tidak perlu attach/exec manual.
+Empty default `CMD` -> the entrypoint `exec`s `aoe` directly, so you land in
+the TUI as soon as the container starts. No manual attach/exec needed.
 
-### Helper CLI `npg` (hemat token, akurat)
+### Helper CLI `npg` (token-saving, accurate)
 
-Agent (dan kamu) tidak perlu hafal `xbps`/`sv`. Satu API:
+Neither you nor the agent needs to memorize `xbps`/`sv`. One API:
 
 ```bash
-npg commands --json   # discovery semua perintah
-npg sys info          # OS, PID1, versi tools, service — 1 panggilan
+npg commands --json   # discover every command
+npg sys info          # OS, PID1, tool versions, services — 1 call
 npg pkg search htop
-npg pkg add htop ripgrep   # batch idempoten, 1 transaksi
-npg pkg update             # full update dua-fase yang benar
+npg pkg add htop ripgrep   # idempotent batch, 1 transaction
+npg pkg update             # correct two-phase full update
 npg svc status
 npg svc enable sshd
-npg skills sync            # pasang skill ke semua harness agent
+npg skills sync            # install skills into every agent harness
 ```
 
-`npg` menolak jalan di non-Void agar agent tidak salah eksekusi di host.
+`npg` refuses to run on non-Void systems so the agent can't misfire on the
+host.
 
-### Skill agent bawaan
+### Built-in agent skills
 
-Skill `void-manage` ter-bake di `/usr/share/nanoplayground/skills/` dan
-auto-sync tiap container start ke `~/.agents/skills/`, `~/.claude/skills/`,
-`~/.codex/skills/`, `~/.config/opencode/skills/` (pola symlink ala Omarchy).
-Di repo ini sumbernya di `.opencode/skills/` — tambah skill baru di sana,
-tanpa ubah kode installer.
+The `void-manage` skill is baked into `/usr/share/nanoplayground/skills/`
+and auto-synced on every container start into `~/.agents/skills/`,
+`~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`
+(Omarchy-style symlink pattern). In this repo the source lives in
+`.opencode/skills/` — add a new skill there, no installer code changes
+needed.
 
-### Butuh package tambahan saat runtime?
+### Extra packages at runtime?
 
-User `admin` sudah masuk `sudoers` tanpa password:
+User `admin` is in sudoers with no password:
 
 ```bash
-npg pkg add <paket>        # cara utama (idempoten + verifikasi)
-# atau mentah:
-sudo xbps-install -Sy <paket>
+npg pkg add <package>        # preferred way (idempotent + verified)
+# or raw:
+sudo xbps-install -Sy <package>
 ```
 
-Kalau kamu tidak mau container punya akses sudo sama sekali, hapus baris
-`sudoers.d` di Dockerfile.
+If you don't want the container to have sudo access at all, remove the
+`sudoers.d` line from the Dockerfile.
 
-### Web dashboard (opsional, experimental)
+### Web dashboard (optional, experimental)
 
 ```bash
 docker run -it --rm \
@@ -143,30 +147,28 @@ docker run -it --rm \
   nanoplayground
 ```
 
-Entrypoint akan **mencoba** beberapa kandidat sub-command (`aoe serve`,
-`aoe session serve`, `aoe web`) dan pakai yang valid di versi `aoe` yang
-ter-install saat image di-build. Kalau tidak ada satupun yang cocok
-(sub-command berubah lagi di rilis baru), pesan error akan menyarankan cek
-`aoe --help` manual — jalankan:
+The entrypoint **tries** several candidate sub-commands (`aoe serve`,
+`aoe session serve`, `aoe web`) and uses the first valid one for the `aoe`
+version installed at build time. If none match (sub-command renamed again in
+a new release), the error tells you to check `aoe --help` manually — run:
 
 ```bash
 docker exec -it <container_id> aoe --help
 ```
 
-untuk lihat nama sub-command web dashboard yang benar di versi tersebut,
-lalu sesuaikan `entrypoint.sh` kalau perlu.
+to see the correct web dashboard sub-command for that version, then adjust
+`entrypoint.sh` if needed.
 
-### Jalan di proot
+### Running under proot
 
-Karena `[sandbox] enabled_by_default = false`, `aoe` tidak akan pernah
-mencoba bicara ke Docker socket kecuali kamu eksplisit pakai flag
-`--sandbox` / `--sandbox-image`. Jalan di proot (tanpa Docker daemon di
-dalam) aman.
+Since `[sandbox] enabled_by_default = false`, `aoe` never touches the Docker
+socket unless you explicitly pass `--sandbox` / `--sandbox-image`. Running
+under proot (no Docker daemon inside) is safe.
 
-## Catatan versi
+## Version notes
 
-- Binary `aoe` butuh **glibc >= 2.28** (floor dari `manylinux_2_28`).
-  Void glibc-full jauh di atas itu.
-- Kalau butuh tool tambahan (Python, Rust, dll — mirip "dev sandbox" resmi
-  AoE), tinggal tambah `RUN xbps-install ...`
-  di Dockerfile, sebelum baris `USER ${USERNAME}`.
+- The `aoe` binary needs **glibc >= 2.28** (floor of `manylinux_2_28`).
+  Void glibc-full is far above that.
+- Need extra tools (Python, Rust, etc. — like the official AoE "dev
+  sandbox")? Just add `RUN xbps-install ...`
+  to the Dockerfile, before the `USER ${USERNAME}` line.
