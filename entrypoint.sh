@@ -4,6 +4,13 @@ set -euo pipefail
 # ----------------------------------------------------------------------------
 # nanoPlayground entrypoint
 #
+# START POLICY (only the TUI auto-starts):
+#   * On `docker run` / `proot-distro` the ONLY thing that auto-starts is the
+#     interactive `aoe` TUI (see below).
+#   * The aoe WEB dashboard does NOT auto-start; it is opt-in via AOE_WEB=1.
+#   * The noVNC desktop (Xvfb/awesome/x11vnc/websockify) is NEVER auto-started;
+#     run `start-desktop.sh` manually when you want it.
+#
 # Default behavior (docker run -it image):
 #   -> open the `aoe` TUI right away, no Docker sandbox is created
 #      (see /root/.agent-of-empires/config.toml -> enabled_by_default=false)

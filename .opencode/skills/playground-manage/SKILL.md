@@ -43,6 +43,10 @@ systemctl is-system-running 2>/dev/null || echo "no systemd bus"
 `aoe` is a tmux-based session manager that runs Claude Code / OpenCode agents.
 It IS the playground. Everything else serves it.
 
+**Start policy:** on `docker run` / `proot-distro`, ONLY the interactive `aoe`
+TUI auto-starts. The web dashboard and the noVNC desktop never auto-start —
+they are opt-in / on-demand (below).
+
 - `aoe` (no args) → interactive TUI dashboard. Don't run a TUI when not a TTY.
 - Start the daemon + web dashboard: `aoe serve` (entrypoint tries it when
   `AOE_WEB=1`). Then `aoe url` prints the dashboard address.
@@ -70,7 +74,8 @@ It IS the playground. Everything else serves it.
 `bin/start-desktop.sh` wires Xvfb → awesome → x11vnc → websockify → noVNC.
 Components live at `/opt/novnc`; browsers at `/ms-playwright`.
 
-- Start: `start-desktop.sh` (defaults `:1`, 1440x900, VNC :5900, web :6080).
+- **Never auto-starts.** Start it explicitly when you need a GUI:
+  `start-desktop.sh` (defaults `:1`, 1440x900, VNC :5900, web :6080).
 - Access in a browser: `http://<host>:6080/vnc.html`.
 - Tune via env: `DISPLAY_NUM`, `RESOLUTION`, `VNC_PORT`, `WEB_PORT`, `NOVNC_DIR`.
 - Headless browser automation (crawl4ai/playwright/firefox) needs no desktop;
