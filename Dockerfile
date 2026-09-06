@@ -24,10 +24,10 @@ ENV LANG=C.UTF-8 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # --- Base deps (still as root) ------------------------------------------------
-# Must-have (verified for Ubuntu 26.04): github-cli (gh), jq, fd, ctags
-# (universal-ctags), bat, delta, eza, sqlite3, python3 + pip. yq / ast-grep /
-# just are NOT apt packages (snap-only / unpackaged) — they come from static
-# binaries in the next step.
+# Must-have (verified for Ubuntu 26.04): jq, fd, ctags (universal-ctags), bat,
+# delta, eza, sqlite3, python3 + pip. yq / ast-grep / just / gh (github-cli)
+# are NOT apt packages on Ubuntu (snap-only / unpackaged) — they come from
+# static binaries in the next step.
 # Nice-to-have: bat, delta, eza, sqlite3.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
@@ -47,7 +47,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         uidmap \
         ncurses-base \
         tzdata \
-        github-cli \
         jq \
         fd-find \
         universal-ctags \
@@ -62,13 +61,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
 
 # --- Agent tools missing from the Ubuntu archive --------------------------------
-# yq & ast-grep are snap-only on Ubuntu (no apt package) and just is unpackaged,
-# so `apt-get install` for them fails the build (exit 100). Pull static binaries
-# instead. TARGETARCH-aware.
+# yq & ast-grep are snap-only on Ubuntu (no apt package), and just & github-cli
+# are unpackaged there, so `apt-get install` for them fails the build (exit 100).
+# Pull static binaries instead. TARGETARCH-aware.
 ARG TARGETARCH
 RUN case "${TARGETARCH}" in \
-        amd64) YQ_ASSET="yq_linux_amd64"; JUST_T="x86_64-unknown-linux-musl"; SG_T="x86_64-unknown-linux-gnu" ;; \
-        arm64) YQ_ASSET="yq_linux_arm64"; JUST_T="aarch64-unknown-linux-musl"; SG_T="aarch64-unknown-linux-gnu" ;; \
+        amd64) YQ_ASSET="yq_linux_amd64"; JUST_T="x86_64-unknown-linux-musl"; SG_T="x86_64-unknown-linux-gnu"; GH_T="amd64" ;; \
+        arm64) YQ_ASSET="yq_linux_arm64"; JUST_T="aarch64-unknown-linux-musl"; SG_T="aarch64-unknown-linux-gnu"; GH_T="arm64" ;; \
         *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
     && curl -fsSL -o /usr/local/bin/yq \
@@ -83,7 +82,13 @@ RUN case "${TARGETARCH}" in \
         -o /tmp/sg.zip \
     && python3 -m zipfile -e /tmp/sg.zip /usr/local/bin \
     && rm -f /tmp/sg.zip \
-    && chmod +x /usr/local/bin/ast-grep && ast-grep --version
+    && chmod +x /usr/local/bin/ast-grep && ast-grep --version \
+    && GH_VER="$(curl -fsSL https://api.github.com/repos/cli/cli/releases/latest \
+        | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p' | head -1)" \
+    && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VER}/gh_${GH_VER}_linux_${GH_T}.tar.gz" \
+        | tar -xz -C /tmp \
+    && mv "/tmp/gh_${GH_VER}_linux_${GH_T}/bin/gh" /usr/local/bin/gh \
+    && chmod +x /usr/local/bin/gh && gh --version
 
 # --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
 # Single static binary -> runs on Ubuntu. Installed system-wide
