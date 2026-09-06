@@ -130,7 +130,7 @@ jobs:
         run: |
           for f in *; do
             docker buildx imagetools inspect --raw "${{ env.IMAGE }}@sha256:$f" \
-              | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("platform",{}); print(f"{p.get(\"os\")}/{p.get(\"architecture\")}: {sum(l[\"size\"] for l in d[\"layers\"])//1024//1024} MB compressed")'
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("platform",{}); s=sum(l["size"] for l in d["layers"])//1024//1024; print(p.get("os"), p.get("architecture"), s, "MB compressed")'
           done
 
       # Make the GHCR package public so `docker pull` needs no login.
