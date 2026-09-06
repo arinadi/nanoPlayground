@@ -143,20 +143,11 @@ RUN pip3 install --no-cache-dir websockify \
     && rm -f /tmp/novnc.tar.gz \
     && test -f /opt/novnc/vnc.html
 
-# --- Firefox (Mozilla binary; snap-free for containers) --------------------------
+# --- Firefox (from playwright; snap-free for containers) -------------------------
 # Ubuntu's `firefox` apt package is a snap transition stub that won't run in a
-# container, so we pull the real Mozilla build instead. TARGETARCH-aware.
-ARG TARGETARCH
-RUN case "${TARGETARCH}" in \
-        amd64) FF_ARCH="linux-x86_64" ;; \
-        arm64) FF_ARCH="linux-aarch64" ;; \
-        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
-    esac \
-    && curl -fsSL -o /tmp/firefox.tar.bz2 \
-        "https://download.mozilla.org/?product=firefox-latest-ssl&os=${FF_ARCH}&lang=en-US" \
-    && tar -xjf /tmp/firefox.tar.bz2 -C /opt \
-    && rm -f /tmp/firefox.tar.bz2 \
-    && ln -sf /opt/firefox/firefox /usr/local/bin/firefox
+# container, and download.mozilla.org has no aarch64 Linux tarball. Playwright
+# ships a full, arch-agnostic Firefox build we already pull below — we just
+# expose it as /usr/local/bin/firefox for convenience.
 
 # --- crawl4ai + playwright (browser automation) -----------------------------------
 # Installed to a shared /ms-playwright so both root (build) and the `admin`
@@ -165,6 +156,8 @@ RUN case "${TARGETARCH}" in \
 # the noVNC desktop.
 RUN pip3 install --no-cache-dir playwright crawl4ai \
     && playwright install --with-deps firefox \
+    && ln -sf "$(find /ms-playwright -maxdepth 2 -type f -name firefox | head -1)" \
+        /usr/local/bin/firefox \
     && rm -rf /root/.cache /tmp/*
 
 # --- Create non-root user `admin` --------------------------------------------
