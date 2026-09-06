@@ -33,52 +33,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Ubuntu (default, :latest) ---
-      - name: Meta ubuntu
-        id: meta_ubuntu
+      # --- Void glibc-full (single variant, :latest) ---
+      - name: Meta
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=raw,value=ubuntu,enable={{is_default_branch}}
-            type=sha,prefix=ubuntu-
+            type=sha
             type=ref,event=tag
             type=ref,event=branch
 
-      - name: Build & push ubuntu
+      - name: Build & push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: ${{ steps.meta_ubuntu.outputs.tags }}
-          labels: ${{ steps.meta_ubuntu.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # --- Void variant (:void) ---
-      - name: Meta void
-        id: meta_void
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}
-          flavor: |
-            latest=false
-          tags: |
-            type=raw,value=void,enable={{is_default_branch}}
-            type=sha,prefix=void-
-            type=ref,event=tag,suffix=-void
-            type=ref,event=branch,suffix=-void
-
-      - name: Build & push void
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile.void
-          push: true
-          tags: ${{ steps.meta_void.outputs.tags }}
-          labels: ${{ steps.meta_void.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

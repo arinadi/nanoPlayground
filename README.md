@@ -19,8 +19,6 @@ sekali.
 
 ```bash
 docker run -it --rm ghcr.io/arinadi/nanoplayground
-# varian void:
-docker run -it --rm ghcr.io/arinadi/nanoplayground:void
 ```
 
 Tanpa params pun jalan: config dir dibuat otomatis, `ANTHROPIC_API_KEY`
@@ -43,26 +41,18 @@ docker run -it --rm \
 
 ## Build
 
-Pilih salah satu base OS. Keduanya sudah divalidasi memenuhi syarat glibc
->= 2.28 yang dibutuhkan binary `aoe`.
+Base tunggal: **Void Linux glibc-full** (rolling, kecil, `glibc` agar binary
+`aoe` yang butuh glibc >= 2.28 jalan).
 
 Samakan `USER_UID`/`USER_GID` dengan user host kamu (`id -u` / `id -g`)
 supaya file yang dibuat lewat bind-mount `/workspace` tidak jadi milik UID
 asing yang cuma bisa diutak-atik lewat `sudo`:
 
 ```bash
-# Ubuntu 26.04 LTS (direkomendasikan, apt lebih umum & stabil)
 docker build \
   --build-arg USER_UID=$(id -u) \
   --build-arg USER_GID=$(id -g) \
-  -t nanoplayground:ubuntu .
-
-# Void Linux glibc-full (rolling release, image lebih kecil)
-docker build \
-  -f Dockerfile.void \
-  --build-arg USER_UID=$(id -u) \
-  --build-arg USER_GID=$(id -g) \
-  -t nanoplayground:void .
+  -t nanoplayground .
 ```
 
 Kalau `id -u` kamu di host adalah `0` (misal proot yang selalu bertindak
@@ -79,7 +69,7 @@ docker run -it --rm \
   -v "$HOME/.config/opencode:/home/admin/.config/opencode" \
   -v "$HOME/.agent-of-empires:/home/admin/.agent-of-empires" \
   -e ANTHROPIC_API_KEY \
-  nanoplayground:ubuntu
+  nanoplayground
 ```
 
 Penjelasan mount:
@@ -111,8 +101,7 @@ User `admin` sudah masuk `sudoers` tanpa password, jadi kalau sebuah agent
 perlu install dependency baru di tengah sesi:
 
 ```bash
-sudo apt-get update && sudo apt-get install -y <paket>   # image Ubuntu
-sudo xbps-install -y <paket>                              # image Void
+sudo xbps-install -Sy <paket>
 ```
 
 Kalau kamu tidak mau container punya akses sudo sama sekali, hapus baris
@@ -125,7 +114,7 @@ docker run -it --rm \
   -p 4200:4200 \
   -e AOE_WEB=1 \
   ... \
-  nanoplayground:ubuntu
+  nanoplayground
 ```
 
 Entrypoint akan **mencoba** beberapa kandidat sub-command (`aoe serve`,
@@ -151,7 +140,7 @@ dalam) aman.
 ## Catatan versi
 
 - Binary `aoe` butuh **glibc >= 2.28** (floor dari `manylinux_2_28`).
-  Ubuntu 26.04 dan Void glibc-full jauh di atas itu.
+  Void glibc-full jauh di atas itu.
 - Kalau butuh tool tambahan (Python, Rust, dll — mirip "dev sandbox" resmi
-  AoE), tinggal tambah `RUN apt-get install ...` / `RUN xbps-install ...`
-  di Dockerfile masing-masing, sebelum baris `USER ${USERNAME}`.
+  AoE), tinggal tambah `RUN xbps-install ...`
+  di Dockerfile, sebelum baris `USER ${USERNAME}`.
