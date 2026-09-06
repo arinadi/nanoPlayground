@@ -175,7 +175,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg \
 # Installed into the user home via `npg skills sync` (build + every start).
 COPY .opencode/skills /usr/share/nanoplayground/skills
 
-RUN mkdir -p /workspace && chown -R "${USERNAME}:${USERNAME}" /workspace
+RUN mkdir -p /workspace && chown -R "${USER_UID}:${USER_GID}" /workspace
 
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
@@ -198,7 +198,7 @@ RUN npm install -g --no-fund --no-audit --no-update-notifier \
     && rm -rf /tmp/* /var/tmp/*
 
 RUN mkdir -p /home/${USERNAME}/.agent-of-empires /home/${USERNAME}/.claude /home/${USERNAME}/.config/opencode
-COPY --chown=${USERNAME}:${USERNAME} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
+COPY --chown=${USER_UID}:${USER_GID} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
 
 # Install skills + CLI helper for the default user (the entrypoint re-syncs
 # on every start so even mounted homes keep the skills).
