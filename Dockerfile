@@ -25,9 +25,11 @@ ENV LANG=C.UTF-8 \
 # Must-bake (verified in void-packages): ast-grep, github-cli (gh), jq, yq,
 # fd, just, ctags (universal-ctags), python3 + pip (for trafilatura).
 # Worth-baking: bat, delta, eza, sqlite (sqlite3 shell).
+# Skip man/docs/locales in xbps payloads (see noextract.conf). Must be in
+# place BEFORE any xbps-install that should honor it.
+COPY noextract.conf /etc/xbps.d/00-noextract.conf
 RUN xbps-install -Suy xbps && \
-    xbps-install -Suy && \
-    xbps-install -y \
+    xbps-install -Suy \
         bash \
         tmux \
         git \
@@ -37,11 +39,16 @@ RUN xbps-install -Suy xbps && \
         ripgrep \
         fzf \
         openssh \
-        base-devel \
+        gcc \
+        make \
+        pkg-config \
+        glibc-devel \
         nodejs \
         nano \
         sudo \
         shadow \
+        ncurses \
+        tzdata \
         ast-grep \
         github-cli \
         jq \
@@ -55,7 +62,9 @@ RUN xbps-install -Suy xbps && \
         sqlite \
         python3 \
         python3-pip \
-    && xbps-remove -Oo -y
+    && rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
+        /usr/share/locale/* /var/cache/xbps/* \
+    && xbps-remove -Oo -y; rm -rf /var/cache/xbps/*
 
 # --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
 # Single static binary -> runs on Void glibc too. Installed system-wide
@@ -75,7 +84,9 @@ RUN case "${TARGETARCH}" in \
 
 # --- trafilatura (https://trafilatura.readthedocs.io) --------------------------
 # Best-in-class HTML -> text/Markdown extractor. CLI: `trafilatura -u <URL>`.
-RUN pip3 install --no-cache-dir trafilatura && trafilatura --help >/dev/null
+RUN pip3 install --no-cache-dir --no-compile trafilatura \
+    && find /usr/lib/python* -type d -name '__pycache__' -prune -exec rm -rf {} + \
+    && rm -rf /root/.cache && trafilatura --help >/dev/null
 
 # --- Create non-root user `admin` --------------------------------------------
 RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
@@ -105,8 +116,13 @@ RUN curl -fsSL \
       https://raw.githubusercontent.com/agent-of-empires/agent-of-empires/main/scripts/install.sh \
       | bash
 
-RUN npm install -g @anthropic-ai/claude-code
-RUN npm install -g opencode-ai@latest
+# One transaction + cache purge: npm's _cacache (~200MB) must die in the SAME
+# layer or it still ships. Sourcemap (*.map) removal only affects debugging.
+RUN npm install -g --no-fund --no-audit --no-update-notifier \
+        @anthropic-ai/claude-code opencode-ai@latest \
+    && npm cache clean --force \
+    && find "${NPM_CONFIG_PREFIX}/lib/node_modules" -name '*.map' -delete \
+    && rm -rf /tmp/* /var/tmp/*
 
 RUN mkdir -p /home/${USERNAME}/.agent-of-empires /home/${USERNAME}/.claude /home/${USERNAME}/.config/opencode
 COPY --chown=${USERNAME}:${USERNAME} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml

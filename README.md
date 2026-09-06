@@ -186,6 +186,25 @@ Since `[sandbox] enabled_by_default = false`, `aoe` never touches the Docker
 socket unless you explicitly pass `--sandbox` / `--sandbox-image`. Running
 under proot (no Docker daemon inside) is safe.
 
+### Termux proot-distro
+
+```bash
+pd install ghcr.io/arinadi/nanoplayground -n npg
+pd run npg --user admin     # main TUI (needs an interactive Termux session)
+pd login npg --user admin   # shell / debugging
+```
+
+Notes from the proot trenches:
+
+- `pd login` defaults to **root** and ignores the image `USER` — always pass
+  `--user admin` so `HOME`, skills, `rtk` state, and npm bins resolve to
+  `/home/admin`.
+- Keep `TERM=xterm-256color` from Termux; never `--detach` a TUI session.
+  If `tmux` breaks after heavy shell work, open a fresh Termux session.
+- Storage hygiene on phones: `pd backup npg -o npg.tar.xz` before
+  experiments, `pd clear-cache` after pulls. Pulls are gzip layers
+  (~500MB) — prefer Wi-Fi.
+
 ## Version notes
 
 - The `aoe` binary needs **glibc >= 2.28** (floor of `manylinux_2_28`).

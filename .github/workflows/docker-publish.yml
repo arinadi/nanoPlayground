@@ -125,6 +125,14 @@ jobs:
         env:
           DOCKER_METADATA_OUTPUT_JSON: ${{ steps.meta.outputs.json }}
 
+      - name: Report image size (compressed, per arch)
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          for f in *; do
+            docker buildx imagetools inspect --raw "${{ env.IMAGE }}@sha256:$f" \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("platform",{}); print(f"{p.get(\"os\")}/{p.get(\"architecture\")}: {sum(l[\"size\"] for l in d[\"layers\"])//1024//1024} MB compressed")'
+          done
+
       # Make the GHCR package public so `docker pull` needs no login.
       # GITHUB_TOKEN already has packages:write; the publishing repo
       # automatically gets admin on its package. Failure = warning only
