@@ -20,6 +20,39 @@ distro, uses **apt/dpkg** (not xbps/apk/dnf) and **systemd** (not runit).
 Base image here is `ubuntu:26.04` (glibc, required by the `aoe` binary which
 needs glibc >= 2.28).
 
+## Environment awareness — proot vs docker/podman vs VM (CHECK FIRST)
+
+nanoPlayground runs in three very different places. Detect before acting —
+do NOT assume systemd or a normal process tree:
+
+```bash
+ps -p 1 -o comm=           # PID 1 name
+[ -f /.dockerenv ] && echo docker
+cat /proc/1/cgroup 2>/dev/null | head -1      # "docker"/"podman"/"libpod" => container
+grep -q proot /proc/version && echo proot     # proot@termux marker
+systemctl is-system-running 2>/dev/null || echo "no systemd bus"
+```
+
+Interpretation:
+
+| Where | PID 1 | systemd bus | What works |
+|---|---|---|---|
+| Booted Ubuntu VM / host | `systemd` | yes | `systemctl enable/start`, real services |
+| Docker / podman run | `entrypoint.sh` | no | `systemctl` fails — run daemons foreground |
+| Termux **proot-distro** | `entrypoint.sh` | no | `systemctl` fails — run daemons foreground |
+
+Rules that follow:
+- In **docker/podman** AND **proot**, PID 1 is `entrypoint.sh`, NOT systemd, so
+  `systemctl start|enable|stop` fail cleanly ("Failed to connect to bus").
+  That is expected — never fight it. Enablement is baked at build time or the
+  daemon is run in the foreground (see `references/services.md`).
+- Under **proot** expect extra quirks: a fake `proot@termux` kernel version,
+  bind-mounted `/proc`/`/sys` (pid/loadavg/etc. are stubs), and no real
+  `CAP_SYS_ADMIN`/device nodes. Package install works, but anything needing
+  kernel features (namespaces, real mounts, systemd) will not. If a command
+  "should work" but silently fails, suspect proot limits first.
+- Only ever touch `systemctl` when PID 1 is literally `systemd`.
+
 ## Prefer `npg` wrappers (hemat token)
 
 Image ini punya CLI `npg` — SATU panggilan menggantikan banyak shell:
