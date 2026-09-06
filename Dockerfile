@@ -58,11 +58,18 @@ RUN xbps-install -Suy xbps && \
     && xbps-remove -Oo -y
 
 # --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
-# Single static musl binary -> runs on Void glibc too. Installed system-wide
+# Single static binary -> runs on Void glibc too. Installed system-wide
 # (NOT via install.sh, which targets ~/.local/bin, and NEVER via
 # `cargo install rtk` — that is a different crate).
-RUN RTK_VER="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rtk-ai/rtk/releases/latest | sed 's#.*/##')" \
-    && curl -fsSL "https://github.com/rtk-ai/rtk/releases/download/${RTK_VER}/rtk-x86_64-unknown-linux-musl.tar.gz" \
+# TARGETARCH-aware (amd64/arm64) for multi-arch builds.
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+        amd64) RTK_TRIPLE="x86_64-unknown-linux-musl" ;; \
+        arm64) RTK_TRIPLE="aarch64-unknown-linux-gnu" ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && RTK_VER="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rtk-ai/rtk/releases/latest | sed 's#.*/##')" \
+    && curl -fsSL "https://github.com/rtk-ai/rtk/releases/download/${RTK_VER}/rtk-${RTK_TRIPLE}.tar.gz" \
         | tar -xz -C /usr/local/bin \
     && chmod +x /usr/local/bin/rtk && rtk --version
 
