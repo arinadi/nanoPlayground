@@ -53,6 +53,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         pkg-config \
         nodejs \
+        npm \
         nano \
         sudo \
         uidmap \
