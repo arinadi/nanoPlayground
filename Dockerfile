@@ -21,7 +21,8 @@ ENV LANG=C.UTF-8 \
     TERM=xterm-256color \
     RTK_TELEMETRY_DISABLED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PIP_BREAK_SYSTEM_PACKAGES=1
 
 # --- Base deps (still as root) ------------------------------------------------
 # Must-have (verified for Ubuntu 26.04): jq, fd, ctags (universal-ctags), bat,
