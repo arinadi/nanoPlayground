@@ -112,11 +112,15 @@ RUN mkdir -p /home/${USERNAME}/.agent-of-empires /home/${USERNAME}/.claude /home
 COPY --chown=${USERNAME}:${USERNAME} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
 
 # Install skills + CLI helper for the default user (the entrypoint re-syncs
-# on every start so even mounted homes keep the skills). Pre-register rtk
-# hooks non-interactively for both agents (entrypoint repeats best-effort).
-RUN npg skills sync && npg commands >/dev/null \
-    && rtk init -g --auto-patch >/dev/null 2>&1 || true
-RUN rtk init -g --opencode --auto-patch >/dev/null 2>&1 || true
+# on every start so even mounted homes keep the skills).
+RUN npg skills sync && npg commands >/dev/null
+
+# rtk setup for BOTH agents — verbose on purpose so the build log proves
+# registration. `rtk init --show` fails the build if hooks are missing.
+RUN rtk init -g --auto-patch && rtk init -g --opencode --auto-patch && rtk init --show
+
+# Cleaner diffs for agents: delta pager (git auto-disables it when not a TTY).
+RUN git config --global core.pager delta
 
 WORKDIR /workspace
 

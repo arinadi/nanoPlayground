@@ -45,6 +45,10 @@ if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
     echo "[nanoPlayground] ANTHROPIC_API_KEY is empty — Claude Code will ask for login/API key inside the TUI."
 fi
 
+if [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
+    echo "[nanoPlayground] GH_TOKEN is empty — 'gh' works for public repos only (authenticated calls need it)."
+fi
+
 WEB_PORT="${AOE_WEB_PORT:-4200}"
 
 try_start_web() {
