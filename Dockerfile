@@ -20,7 +20,8 @@ ARG USER_GID=1000
 ENV LANG=C.UTF-8 \
     TERM=xterm-256color \
     RTK_TELEMETRY_DISABLED=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # --- Base deps (still as root) ------------------------------------------------
 # Must-have (verified for Ubuntu 26.04): ast-grep, github-cli (gh), jq, yq,
@@ -83,6 +84,51 @@ RUN pip3 install --no-cache-dir --no-compile trafilatura \
     && find /usr/lib/python* -type d -name '__pycache__' -prune -exec rm -rf {} + \
     && rm -rf /root/.cache && trafilatura --help >/dev/null
 
+# --- Remote desktop / noVNC stack ----------------------------------------------
+# Headless X + a window manager, shared over VNC, bridged to the browser via
+# noVNC + websockify. `start-desktop.sh` wires it all together at runtime.
+RUN apt-get install -y --no-install-recommends \
+        xvfb \
+        xauth \
+        x11vnc \
+        awesome \
+        xterm \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
+
+# --- noVNC + websockify ----------------------------------------------------------
+RUN pip3 install --no-cache-dir websockify \
+    && curl -fsSL -o /tmp/novnc.tar.gz \
+        https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz \
+    && mkdir -p /opt/novnc \
+    && tar -xzf /tmp/novnc.tar.gz -C /opt/novnc --strip-components=1 \
+    && rm -f /tmp/novnc.tar.gz \
+    && test -f /opt/novnc/vnc.html
+
+# --- Firefox (Mozilla binary; snap-free for containers) --------------------------
+# Ubuntu's `firefox` apt package is a snap transition stub that won't run in a
+# container, so we pull the real Mozilla build instead. TARGETARCH-aware.
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+        amd64) FF_ARCH="linux-x86_64" ;; \
+        arm64) FF_ARCH="linux-aarch64" ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /tmp/firefox.tar.bz2 \
+        "https://download.mozilla.org/?product=firefox-latest-ssl&os=${FF_ARCH}&lang=en-US" \
+    && tar -xjf /tmp/firefox.tar.bz2 -C /opt \
+    && rm -f /tmp/firefox.tar.bz2 \
+    && ln -sf /opt/firefox/firefox /usr/local/bin/firefox
+
+# --- crawl4ai + playwright (browser automation) -----------------------------------
+# Installed to a shared /ms-playwright so both root (build) and the `admin`
+# runtime user find the same browser binaries. `--with-deps` lets playwright
+# pull every system library firefox needs (via apt) so it also runs headed in
+# the noVNC desktop.
+RUN pip3 install --no-cache-dir playwright crawl4ai \
+    && playwright install --with-deps firefox \
+    && rm -rf /root/.cache /tmp/*
+
 # --- Create non-root user `admin` --------------------------------------------
 RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
     && useradd --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" \
@@ -91,7 +137,8 @@ RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY bin/npg /usr/local/bin/npg
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg
+COPY bin/start-desktop.sh /usr/local/bin/start-desktop.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg /usr/local/bin/start-desktop.sh
 
 # Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
 # Installed into the user home via `npg skills sync` (build + every start).
@@ -114,7 +161,7 @@ RUN curl -fsSL \
 # One transaction + cache purge: npm's _cacache (~200MB) must die in the SAME
 # layer or it still ships. Sourcemap (*.map) removal only affects debugging.
 RUN npm install -g --no-fund --no-audit --no-update-notifier \
-        @anthropic-ai/claude-code opencode-ai@latest \
+        @anthropic-ai/claude-code opencode-ai@latest pnpm \
     && npm cache clean --force \
     && find "${NPM_CONFIG_PREFIX}/lib/node_modules" -name '*.map' -delete \
     && rm -rf /tmp/* /var/tmp/*
@@ -139,7 +186,10 @@ WORKDIR /workspace
 # Users who want persistence add -v themselves (see README).
 
 RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null \
-    && rtk --version && ast-grep --version && gh --version && trafilatura --help >/dev/null
+    && rtk --version && ast-grep --version && gh --version && trafilatura --help >/dev/null \
+    && pnpm --version && test -x /usr/local/bin/firefox && awesome --version \
+    && command -v websockify \
+    && python3 -c "import playwright, crawl4ai"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []

@@ -44,8 +44,8 @@ docker run -it --rm \
 
 ## Build
 
-Single base: **Void Linux glibc-full** (rolling, small, `glibc` so the `aoe`
-binary with its glibc >= 2.28 requirement runs).
+Single base: **Ubuntu 26.04 LTS** (glibc, so the `aoe` binary with its
+glibc >= 2.28 requirement runs; apt/systemd for packages & services).
 
 Match `USER_UID`/`USER_GID` to your host user (`id -u` / `id -g`) so files
 created through the `/workspace` bind-mount aren't owned by a foreign UID
@@ -99,7 +99,7 @@ the TUI as soon as the container starts. No manual attach/exec needed.
 
 ### Helper CLI `npg` (token-saving, accurate)
 
-Neither you nor the agent needs to memorize `xbps`/`sv`. One API:
+Neither you nor the agent needs to memorize `apt`/`systemctl`. One API:
 
 ```bash
 npg commands --json   # discover every command
@@ -112,7 +112,7 @@ npg svc enable sshd
 npg skills sync            # install skills into every agent harness
 ```
 
-`npg` refuses to run on non-Void systems so the agent can't misfire on the
+`npg` refuses to run on non-Ubuntu systems so the agent can't misfire on the
 host.
 
 ### Agent toolbox (baked in)
@@ -138,7 +138,7 @@ the image).
 
 ### Built-in agent skills
 
-The `void-manage` skill is baked into `/usr/share/nanoplayground/skills/`
+The `ubuntu-manage` skill is baked into `/usr/share/nanoplayground/skills/`
 and auto-synced on every container start into `~/.agents/skills/`,
 `~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`
 (Omarchy-style symlink pattern). In this repo the source lives in
@@ -152,7 +152,7 @@ User `admin` is in sudoers with no password:
 ```bash
 npg pkg add <package>        # preferred way (idempotent + verified)
 # or raw:
-sudo xbps-install -Sy <package>
+sudo apt-get install -y <package>
 ```
 
 If you don't want the container to have sudo access at all, remove the
@@ -208,7 +208,7 @@ Notes from the proot trenches:
 ## Version notes
 
 - The `aoe` binary needs **glibc >= 2.28** (floor of `manylinux_2_28`).
-  Void glibc-full is far above that.
+  Ubuntu 26.04's glibc is far above that.
 - Need extra tools (Python, Rust, etc. — like the official AoE "dev
-  sandbox")? Just add `RUN xbps-install ...`
+  sandbox")? Just add `RUN apt-get install ...`
   to the Dockerfile, before the `USER ${USERNAME}` line.
