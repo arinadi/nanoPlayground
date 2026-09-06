@@ -125,7 +125,7 @@ RUN pip3 install --no-cache-dir --no-compile trafilatura \
 # --- Remote desktop / noVNC stack ----------------------------------------------
 # Headless X + a window manager, shared over VNC, bridged to the browser via
 # noVNC + websockify. `start-desktop.sh` wires it all together at runtime.
-RUN apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb \
         xauth \
         x11vnc \
