@@ -18,10 +18,13 @@ ARG USER_UID=1000
 ARG USER_GID=1000
 
 ENV LANG=C.UTF-8 \
-    TERM=xterm-256color
+    TERM=xterm-256color \
+    RTK_TELEMETRY_DISABLED=1
 
-# xbps-install -Su twice: first update xbps itself (the officially
-# recommended Void pattern), then the whole system.
+# --- Base deps (still as root) ------------------------------------------------
+# Must-bake (verified in void-packages): ast-grep, github-cli (gh), jq, yq,
+# fd, just, ctags (universal-ctags), python3 + pip (for trafilatura).
+# Worth-baking: bat, delta, eza, sqlite (sqlite3 shell).
 RUN xbps-install -Suy xbps && \
     xbps-install -Suy && \
     xbps-install -y \
@@ -38,7 +41,33 @@ RUN xbps-install -Suy xbps && \
         nano \
         sudo \
         shadow \
+        ast-grep \
+        github-cli \
+        jq \
+        yq \
+        fd \
+        just \
+        ctags \
+        bat \
+        delta \
+        eza \
+        sqlite \
+        python3 \
+        python3-pip \
     && xbps-remove -Oo -y
+
+# --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
+# Single static musl binary -> runs on Void glibc too. Installed system-wide
+# (NOT via install.sh, which targets ~/.local/bin, and NEVER via
+# `cargo install rtk` — that is a different crate).
+RUN RTK_VER="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rtk-ai/rtk/releases/latest | sed 's#.*/##')" \
+    && curl -fsSL "https://github.com/rtk-ai/rtk/releases/download/${RTK_VER}/rtk-x86_64-unknown-linux-musl.tar.gz" \
+        | tar -xz -C /usr/local/bin \
+    && chmod +x /usr/local/bin/rtk && rtk --version
+
+# --- trafilatura (https://trafilatura.readthedocs.io) --------------------------
+# Best-in-class HTML -> text/Markdown extractor. CLI: `trafilatura -u <URL>`.
+RUN pip3 install --no-cache-dir trafilatura && trafilatura --help >/dev/null
 
 # --- Create non-root user `admin` --------------------------------------------
 RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
@@ -75,15 +104,19 @@ RUN mkdir -p /home/${USERNAME}/.agent-of-empires /home/${USERNAME}/.claude /home
 COPY --chown=${USERNAME}:${USERNAME} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
 
 # Install skills + CLI helper for the default user (the entrypoint re-syncs
-# on every start so even mounted homes keep the skills).
-RUN npg skills sync && npg commands >/dev/null
+# on every start so even mounted homes keep the skills). Pre-register rtk
+# hooks non-interactively for both agents (entrypoint repeats best-effort).
+RUN npg skills sync && npg commands >/dev/null \
+    && rtk init -g --auto-patch >/dev/null 2>&1 || true
+RUN rtk init -g --opencode --auto-patch >/dev/null 2>&1 || true
 
 WORKDIR /workspace
 
 # No VOLUME: the container runs on its internal filesystem by default.
 # Users who want persistence add -v themselves (see README).
 
-RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null
+RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null \
+    && rtk --version && ast-grep --version && gh --version && trafilatura --help >/dev/null
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []

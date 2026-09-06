@@ -115,6 +115,27 @@ npg skills sync            # install skills into every agent harness
 `npg` refuses to run on non-Void systems so the agent can't misfire on the
 host.
 
+### Agent toolbox (baked in)
+
+Beyond `rg`/`fzf`/`git`, every container ships proven agent tools:
+
+| Tool | Why | Invoke |
+|---|---|---|
+| `rtk` | Compresses shell output before the LLM reads it (up to 90% less bash output); pre-registered for Claude Code + OpenCode | `rtk gain`, or just run commands — the hook rewrites them |
+| `ast-grep` | Structural code search (`function $NAME($$$)`), 25+ langs | `ast-grep -p 'pattern' --lang ts` |
+| `gh` | PRs/issues/checks without scraping the web UI (needs `GH_TOKEN`) | `gh pr view 42`, `gh issue list` |
+| `jq` / `yq` | Slice JSON/YAML instead of catting whole files | `jq '.items[:5]'`, `yq -y . file.yaml` |
+| `fd` / `bat` / `eza` / `delta` | Cleaner `find`/`cat`/`ls`/`diff` = fewer tokens | `fd`, `bat file`, `eza`, `git config --global core.pager delta` |
+| `just` | Discoverable tasks via `just -l`, no README grep | `just -l` |
+| `ctags` | Zero-daemon symbol index | `ctags -R` |
+| `trafilatura` | Web page → clean text, keyless | `trafilatura -u <URL>` |
+| `sqlite3` | Local data work | `sqlite3 db.sqlite` |
+
+Deliberately **not** baked (heavy or key-gated, use on demand): `crawl4ai`
++ Chromium, `pandoc`, full Playwright browsers, `repomix`
+(`npx -y repomix --compress`), Tavily/Firecrawl (API keys via env, never in
+the image).
+
 ### Built-in agent skills
 
 The `void-manage` skill is baked into `/usr/share/nanoplayground/skills/`

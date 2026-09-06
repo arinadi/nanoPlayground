@@ -34,6 +34,13 @@ if command -v npg >/dev/null 2>&1; then
     npg skills sync >/dev/null 2>&1 || true
 fi
 
+# Register rtk shell-output compression for this home (idempotent,
+# non-interactive). Matters when home is mounted from the host.
+if command -v rtk >/dev/null 2>&1; then
+    rtk init -g --auto-patch >/dev/null 2>&1 || true
+    rtk init -g --opencode --auto-patch >/dev/null 2>&1 || true
+fi
+
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
     echo "[nanoPlayground] ANTHROPIC_API_KEY is empty — Claude Code will ask for login/API key inside the TUI."
 fi

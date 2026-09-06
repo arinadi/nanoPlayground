@@ -32,6 +32,11 @@ Image ini punya CLI `npg` — SATU panggilan menggantikan banyak shell:
 
 `npg` refuses to run on non-Void (guarded by `xbps`), so the wrong host stays safe.
 
+`rtk` (Rust Token Killer) is also preinstalled and pre-registered
+(`rtk init` for Claude Code + OpenCode): shell output the agent reads is
+auto-compressed. Prefer plain shell commands (`rg`, `cat`, `git status`) so
+the hook can rewrite them; check savings with `rtk gain`.
+
 ## Hard rules (when `npg` is unavailable)
 
 - NEVER use `apt`, `apt-get`, `dnf`, `apk`, `pacman`, `systemctl`, `service`.
