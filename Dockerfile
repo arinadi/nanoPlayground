@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 #
 # nanoPlayground — Instant, Fun & Agentic Playground for AI coding agents.
-# Void Linux glibc-full base. Runs as non-root user `admin`, not root.
+# Ubuntu 26.04 LTS base. Runs as non-root user `admin`, not root.
 #
 # Build:  docker build \
 #           --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g) \
 #           -t nanoplayground .
 
-FROM ghcr.io/void-linux/void-glibc-full:latest
+FROM ubuntu:26.04
 
 LABEL org.opencontainers.image.title="nanoPlayground" \
       org.opencontainers.image.description="Instant, fun & agentic playground: aoe TUI + Claude Code + OpenCode, runs with plain docker run" \
@@ -19,17 +19,14 @@ ARG USER_GID=1000
 
 ENV LANG=C.UTF-8 \
     TERM=xterm-256color \
-    RTK_TELEMETRY_DISABLED=1
+    RTK_TELEMETRY_DISABLED=1 \
+    DEBIAN_FRONTEND=noninteractive
 
 # --- Base deps (still as root) ------------------------------------------------
-# Must-bake (verified in void-packages): ast-grep, github-cli (gh), jq, yq,
+# Must-have (verified for Ubuntu 26.04): ast-grep, github-cli (gh), jq, yq,
 # fd, just, ctags (universal-ctags), python3 + pip (for trafilatura).
-# Worth-baking: bat, delta, eza, sqlite (sqlite3 shell).
-# Skip man/docs/locales in xbps payloads (see noextract.conf). Must be in
-# place BEFORE any xbps-install that should honor it.
-COPY noextract.conf /etc/xbps.d/00-noextract.conf
-RUN xbps-install -Suy xbps && \
-    xbps-install -Suy \
+# Nice-to-have: bat, delta, eza, sqlite3.
+RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         tmux \
         git \
@@ -38,36 +35,34 @@ RUN xbps-install -Suy xbps && \
         ca-certificates \
         ripgrep \
         fzf \
-        openssh \
-        gcc \
-        make \
+        openssh-client \
+        build-essential \
         pkg-config \
-        glibc-devel \
         nodejs \
         nano \
         sudo \
-        shadow \
-        ncurses \
+        uidmap \
+        ncurses-base \
         tzdata \
         ast-grep \
         github-cli \
         jq \
         yq \
-        fd \
+        fd-find \
         just \
-        ctags \
+        universal-ctags \
         bat \
         delta \
         eza \
-        sqlite \
+        sqlite3 \
         python3 \
         python3-pip \
-    && rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* \
-        /usr/share/locale/* /var/cache/xbps/* \
-    && xbps-remove -Oo -y; rm -rf /var/cache/xbps/*
+        python3-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
 
 # --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
-# Single static binary -> runs on Void glibc too. Installed system-wide
+# Single static binary -> runs on Ubuntu. Installed system-wide
 # (NOT via install.sh, which targets ~/.local/bin, and NEVER via
 # `cargo install rtk` — that is a different crate).
 # TARGETARCH-aware (amd64/arm64) for multi-arch builds.
@@ -98,7 +93,7 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY bin/npg /usr/local/bin/npg
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg
 
-# Built-in skills (read-only defaults, omarchy-style /usr/share/omarchy).
+# Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
 # Installed into the user home via `npg skills sync` (build + every start).
 COPY .opencode/skills /usr/share/nanoplayground/skills
 
