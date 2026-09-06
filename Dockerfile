@@ -24,6 +24,15 @@ ENV LANG=C.UTF-8 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
+# --- Enable universe ------------------------------------------------------------
+# The minimal ubuntu:26.04 container image ships only `main`. The desktop and
+# automation stack (xvfb, x11vnc, awesome, xterm, and friends) lives in
+# `universe`, so enable it across all sources before the first install.
+RUN sed -i 's/^Components: main$/Components: main universe/g' \
+        /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update \
+    && rm -rf /var/lib/apt/lists/*
+
 # --- Base deps (still as root) ------------------------------------------------
 # Must-have (verified for Ubuntu 26.04): jq, fd, ctags (universal-ctags), bat,
 # delta, eza, sqlite3, python3 + pip. yq / ast-grep / just / gh (github-cli)
