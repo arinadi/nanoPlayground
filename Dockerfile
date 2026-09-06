@@ -24,8 +24,10 @@ ENV LANG=C.UTF-8 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # --- Base deps (still as root) ------------------------------------------------
-# Must-have (verified for Ubuntu 26.04): ast-grep, github-cli (gh), jq, yq,
-# fd, just, ctags (universal-ctags), python3 + pip (for trafilatura).
+# Must-have (verified for Ubuntu 26.04): github-cli (gh), jq, fd, ctags
+# (universal-ctags), bat, delta, eza, sqlite3, python3 + pip. yq / ast-grep /
+# just are NOT apt packages (snap-only / unpackaged) — they come from static
+# binaries in the next step.
 # Nice-to-have: bat, delta, eza, sqlite3.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
@@ -45,12 +47,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         uidmap \
         ncurses-base \
         tzdata \
-        ast-grep \
         github-cli \
         jq \
-        yq \
         fd-find \
-        just \
         universal-ctags \
         bat \
         delta \
@@ -61,6 +60,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
+
+# --- Agent tools missing from the Ubuntu archive --------------------------------
+# yq & ast-grep are snap-only on Ubuntu (no apt package) and just is unpackaged,
+# so `apt-get install` for them fails the build (exit 100). Pull static binaries
+# instead. TARGETARCH-aware.
+ARG TARGETARCH
+RUN case "${TARGETARCH}" in \
+        amd64) YQ_ASSET="yq_linux_amd64"; JUST_T="x86_64-unknown-linux-musl"; SG_T="x86_64-unknown-linux-gnu" ;; \
+        arm64) YQ_ASSET="yq_linux_arm64"; JUST_T="aarch64-unknown-linux-musl"; SG_T="aarch64-unknown-linux-gnu" ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL -o /usr/local/bin/yq \
+        "https://github.com/mikefarah/yq/releases/latest/download/${YQ_ASSET}" \
+    && chmod +x /usr/local/bin/yq && yq --version \
+    && JUST_VER="$(curl -fsSL https://api.github.com/repos/casey/just/releases/latest \
+        | sed -n 's/.*"tag_name": "\([^"]*\)".*/\1/p' | head -1)" \
+    && curl -fsSL "https://github.com/casey/just/releases/latest/download/just-${JUST_VER}-${JUST_T}.tar.gz" \
+        | tar -xz -C /usr/local/bin just \
+    && chmod +x /usr/local/bin/just && just --version \
+    && curl -fsSL "https://github.com/ast-grep/ast-grep/releases/latest/download/app-${SG_T}.zip" \
+        -o /tmp/sg.zip \
+    && python3 -m zipfile -e /tmp/sg.zip /usr/local/bin \
+    && rm -f /tmp/sg.zip \
+    && chmod +x /usr/local/bin/ast-grep && ast-grep --version
 
 # --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
 # Single static binary -> runs on Ubuntu. Installed system-wide
@@ -186,7 +209,8 @@ WORKDIR /workspace
 # Users who want persistence add -v themselves (see README).
 
 RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null \
-    && rtk --version && ast-grep --version && gh --version && trafilatura --help >/dev/null \
+    && rtk --version && ast-grep --version && yq --version && just --version \
+    && gh --version && trafilatura --help >/dev/null \
     && pnpm --version && test -x /usr/local/bin/firefox && awesome --version \
     && command -v websockify \
     && python3 -c "import playwright, crawl4ai"
