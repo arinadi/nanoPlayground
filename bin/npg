@@ -10,10 +10,10 @@ set -euo pipefail
 NPG_SKILLS_SRC="${NPG_SKILLS_SRC:-/usr/share/nanoplayground/skills}"
 VERSION="0.1.0"
 
-is_void() { [[ -f /etc/void-release ]] && command -v xbps-install >/dev/null 2>&1; }
-need_void() {
-    if ! is_void; then
-        echo "[npg] not Void Linux (no xbps) — refusing '$1' so the host stays safe." >&2
+is_ubuntu() { [[ -f /etc/os-release ]] && grep -q "^ID=ubuntu" /etc/os-release; }
+need_ubuntu() {
+    if ! is_ubuntu; then
+        echo "[npg] not Ubuntu Linux (no apt) — refusing '$1' so the host stays safe." >&2
         exit 2
     fi
 }
@@ -24,14 +24,14 @@ cmd_commands() {
     local json=0; [[ "${1:-}" == "--json" ]] && json=1
     # format: "group action|summary"
     local rows=(
-        "sys info|OS, PID1, xbps/aoe/claude/opencode versions, service counts (1 call)"
-        "pkg update|two-phase Void full update (xbps first, then system)"
+        "sys info|OS, PID1, apt/aoe/claude/opencode versions, service counts (1 call)"
+        "pkg update|safe Ubuntu full update (apt update, then apt upgrade)"
         "pkg add <p..>|idempotent batch install (skip installed, 1 transaction)"
-        "pkg search <pattern>|search repo packages (xbps-query -Rs)"
+        "pkg search <pattern>|search repo packages (apt search)"
         "pkg rm <package>|remove package (+ unused deps)"
-        "pkg clean|drop orphans + xbps cache"
-        "svc status [name]|runit service status (fails cleanly when not PID1)"
-        "svc enable <name>|enable+start (VM) / bake symlink (container)"
+        "pkg clean|drop cache + auto-remove orphans"
+        "svc status [name]|systemd service status (fails cleanly when not init)"
+        "svc enable <name>|enable+start (system) / bake symlink (container)"
         "svc disable <name>|disable+stop"
         "svc run <name> [args]|run daemon in foreground inside container"
         "skills sync|symlink all skills into ~/.agents ~/.claude ~/.codex ~/.config/opencode"
@@ -56,15 +56,15 @@ cmd_commands() {
 cmd_sys() {
     case "${1:-}" in
         info)
-            echo "os=$(cat /etc/void-release 2>/dev/null || grep PRETTY /etc/os-release 2>/dev/null || uname -s)"
+            echo "os=$(grep PRETTY /etc/os-release 2>/dev/null | cut -d= -f2- || uname -s)"
             echo "pid1=$(ps -p 1 -o comm= 2>/dev/null || echo '?')"
-            echo "runit_pid1=$([ "$(ps -p 1 -o comm= 2>/dev/null)" = "runit" ] && echo yes || echo no)"
-            command -v xbps-query >/dev/null && echo "xbps=$(xbps-query -V 2>/dev/null | head -1)" || echo "xbps=missing"
+            echo "systemd_pid1=$([ "$(ps -p 1 -o comm= 2>/dev/null)" = "systemd" ] && echo yes || echo no)"
+            command -v apt >/dev/null && echo "apt=$(apt --version 2>/dev/null | head -1)" || echo "apt=missing"
             for b in aoe claude opencode; do
                 command -v "$b" >/dev/null && echo "$b=$($b --version 2>/dev/null | head -1)" || echo "$b=missing"
             done
-            echo "services_available=$(ls /etc/sv 2>/dev/null | wc -l)"
-            echo "services_enabled=$(ls /var/service 2>/dev/null | wc -l)"
+            echo "services_available=$(systemctl list-unit-files --type=service 2>/dev/null | tail -n +2 | wc -l)"
+            echo "services_enabled=$(systemctl list-unit-files --type=service --state=enabled 2>/dev/null | tail -n +2 | wc -l)"
             ;;
         *) echo "usage: npg sys info" >&2; exit 2 ;;
     esac
@@ -72,33 +72,33 @@ cmd_sys() {
 
 # --- pkg --------------------------------------------------------------------
 cmd_pkg() {
-    need_void "pkg $1"
+    need_ubuntu "pkg $1"
     local op="${1:-}"; shift || true
     case "$op" in
         update)
-            sudo xbps-install -Suy xbps && sudo xbps-install -Suy
+            sudo apt-get update && sudo apt-get upgrade -y
             ;;
         add)
             (( $# )) || { echo "usage: npg pkg add <packages...>" >&2; exit 2; }
             local missing=()
             for p in "$@"; do
-                xbps-query -S "$p" >/dev/null 2>&1 || missing+=("$p")
+                dpkg -l | grep -q "^ii  $p " || missing+=("$p")
             done
             if (( ${#missing[@]} == 0 )); then echo "[npg] already installed: $*"; return 0; fi
             echo "[npg] installing: ${missing[*]}"
-            sudo xbps-install -Sy "${missing[@]}"
-            for p in "${missing[@]}"; do xbps-query -S "$p" >/dev/null || { echo "[npg] verification failed: $p" >&2; exit 1; }; done
+            sudo apt-get install -y "${missing[@]}"
+            for p in "${missing[@]}"; do dpkg -l | grep -q "^ii  $p " || { echo "[npg] verification failed: $p" >&2; exit 1; }; done
             ;;
         search)
             (( $# )) || { echo "usage: npg pkg search <pattern>" >&2; exit 2; }
-            xbps-query -Rs "$1" | head -30
+            apt search "$1" 2>/dev/null | head -30
             ;;
         rm)
             (( $# )) || { echo "usage: npg pkg rm <package>" >&2; exit 2; }
-            sudo xbps-remove -R "$1"
+            sudo apt-get remove -y "$1"
             ;;
         clean)
-            sudo xbps-remove -Oo -y
+            sudo apt-get autoremove -y && sudo apt-get clean
             ;;
         *) echo "usage: npg pkg {update|add|search|rm|clean}" >&2; exit 2 ;;
     esac
@@ -106,33 +106,37 @@ cmd_pkg() {
 
 # --- svc --------------------------------------------------------------------
 cmd_svc() {
-    need_void "svc $1"
+    need_ubuntu "svc $1"
     local op="${1:-}"; shift || true
     case "$op" in
         status)
-            if [[ $# -eq 0 ]]; then sv status /var/service/* 2>&1 | head -30
-            else sv status "$1" 2>&1; fi
+            if [[ $# -eq 0 ]]; then systemctl status --all --no-pager 2>&1 | head -30
+            else systemctl status "$1" --no-pager 2>&1; fi
             ;;
         enable)
             (( $# )) || { echo "usage: npg svc enable <name>" >&2; exit 2; }
-            [[ -d "/etc/sv/$1" ]] || { echo "[npg] no such service: /etc/sv/$1" >&2; exit 1; }
-            if [[ "$(ps -p 1 -o comm=)" == "runit" ]]; then
-                sudo ln -sfn "/etc/sv/$1" /var/service/
+            if systemctl cat "$1" >/dev/null 2>&1; then
+                if [[ "$(ps -p 1 -o comm=)" == "systemd" ]]; then
+                    sudo systemctl enable "$1" && sudo systemctl start "$1"
+                else
+                    echo "[npg] not systemd PID1 — skipping enable; run foreground via: npg svc run $1"
+                fi
             else
-                # In a container: bake for VM boots + show the foreground way
-                sudo ln -sfn "/etc/sv/$1" /etc/runit/runsvdir/default/ 2>/dev/null || sudo ln -sfn "/etc/sv/$1" /var/service/
-                echo "[npg] not runit PID1 — enable baked in; run foreground via: npg svc run $1"
+                echo "[npg] no such service: $1" >&2; exit 1
             fi
             ;;
         disable)
             (( $# )) || { echo "usage: npg svc disable <name>" >&2; exit 2; }
-            sudo rm -f "/var/service/$1" "/etc/runit/runsvdir/default/$1"
+            sudo systemctl disable "$1" && sudo systemctl stop "$1" 2>/dev/null || true
             ;;
         run)
             (( $# )) || { echo "usage: npg svc run <name> [args...]" >&2; exit 2; }
             local svc="$1"; shift
-            if [[ -x "/etc/sv/$svc/run" ]]; then exec "/etc/sv/$svc/run" "$@"
-            else echo "[npg] no /etc/sv/$svc/run" >&2; exit 1; fi
+            if [[ -x "/lib/systemd/system-generators/$svc" ]]; then
+                exec "/lib/systemd/system-generators/$svc" "$@"
+            else
+                echo "[npg] service script not found: $svc" >&2; exit 1
+            fi
             ;;
         *) echo "usage: npg svc {status|enable|disable|run}" >&2; exit 2 ;;
     esac
