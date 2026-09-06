@@ -81,3 +81,20 @@ jobs:
           labels: ${{ steps.meta_void.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # Jadikan package GHCR public agar `docker pull` tanpa login.
+      # GITHUB_TOKEN sudah packages:write; repo yang publish otomatis
+      # dapat admin ke package-nya. Gagal = warning saja (set manual sekali
+      # di web: Packages -> nanoplayground -> Package settings -> Public).
+      - name: Make package public
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PKG="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]' | cut -d/ -f2)"
+          echo "Setting visibility=public for container package: $PKG"
+          gh api --method PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/user/packages/container/${PKG}" \
+            -f visibility=public \
+          || echo "::warning::Could not set package public via API — set manual di web UI sekali saja."
