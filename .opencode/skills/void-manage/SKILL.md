@@ -20,7 +20,19 @@ apt/dnf/apk) and **runit** (not systemd). Base image here is
 `void-glibc-full` (glibc, required by the `aoe` binary which needs
 glibc >= 2.28) — never suggest `musl`-only tricks.
 
-## Hard rules
+## Prefer `npg` wrappers (hemat token)
+
+Image ini punya CLI `npg` — SATU panggilan menggantikan banyak shell:
+
+- `npg commands [--json]` — discovery semua perintah (mulai dari sini)
+- `npg sys info` — OS, PID1, versi tools, jumlah service (1 panggilan)
+- `npg pkg update | add <p..> | search <pola> | rm <p> | clean`
+- `npg svc status|enable|disable|run` — runit + deteksi container otomatis
+- `npg skills sync|list` — pasang skill ke semua harness agent
+
+`npg` menolak jalan di non-Void (guard `xbps`), jadi aman dari salah host.
+
+## Hard rules (bila `npg` tak tersedia)
 
 - NEVER use `apt`, `apt-get`, `dnf`, `apk`, `pacman`, `systemctl`, `service`.
   Only `xbps-install`, `xbps-query`, `xbps-remove`, `xbps-reconfigure`, `sv`.
@@ -48,7 +60,8 @@ Read the matching file on demand, don't dump all into context:
 
 ## Decision order (copy of omarchy pattern)
 
-1. Stock command (`xbps-install`, `sv`, `ln -s /etc/sv/...`) beats config edit.
+1. `npg <grup> <aksi>` beats raw `xbps-*`/`sv` (idempoten, batch, terverifikasi).
+2. Stock command (`xbps-install`, `sv`, `ln -s /etc/sv/...`) beats config edit.
 2. Config edit beats hook/script. Never edit `/etc/sv/<svc>/run` in place —
    it is overwritten on update; copy/overlay instead.
 3. Keep user state in `$HOME` / `/workspace`; system defaults stay read-only.

@@ -95,12 +95,38 @@ nol lagi. Sekali mount, kamu edit config lewat menu TUI `aoe` / `claude` /
 Default `CMD` kosong -> entrypoint langsung `exec aoe`, jadi begitu
 container start kamu langsung di layar TUI. Tidak perlu attach/exec manual.
 
-### Butuh package tambahan saat runtime?
+### Helper CLI `npg` (hemat token, akurat)
 
-User `admin` sudah masuk `sudoers` tanpa password, jadi kalau sebuah agent
-perlu install dependency baru di tengah sesi:
+Agent (dan kamu) tidak perlu hafal `xbps`/`sv`. Satu API:
 
 ```bash
+npg commands --json   # discovery semua perintah
+npg sys info          # OS, PID1, versi tools, service — 1 panggilan
+npg pkg search htop
+npg pkg add htop ripgrep   # batch idempoten, 1 transaksi
+npg pkg update             # full update dua-fase yang benar
+npg svc status
+npg svc enable sshd
+npg skills sync            # pasang skill ke semua harness agent
+```
+
+`npg` menolak jalan di non-Void agar agent tidak salah eksekusi di host.
+
+### Skill agent bawaan
+
+Skill `void-manage` ter-bake di `/usr/share/nanoplayground/skills/` dan
+auto-sync tiap container start ke `~/.agents/skills/`, `~/.claude/skills/`,
+`~/.codex/skills/`, `~/.config/opencode/skills/` (pola symlink ala Omarchy).
+Di repo ini sumbernya di `.opencode/skills/` — tambah skill baru di sana,
+tanpa ubah kode installer.
+
+### Butuh package tambahan saat runtime?
+
+User `admin` sudah masuk `sudoers` tanpa password:
+
+```bash
+npg pkg add <paket>        # cara utama (idempoten + verifikasi)
+# atau mentah:
 sudo xbps-install -Sy <paket>
 ```
 

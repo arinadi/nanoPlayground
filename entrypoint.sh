@@ -28,6 +28,12 @@ set -euo pipefail
 mkdir -p "${HOME}/.claude" "${HOME}/.config/opencode" \
     "${HOME}/.agent-of-empires" /workspace 2>/dev/null || true
 
+# Sync skill bawaan ke home user (idempoten, murah). Penting bila home
+# di-mount dari host sehingga symlink saat build tidak terbawa.
+if command -v npg >/dev/null 2>&1; then
+    npg skills sync >/dev/null 2>&1 || true
+fi
+
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
     echo "[nanoPlayground] ANTHROPIC_API_KEY kosong — Claude Code akan minta login/API key di dalam TUI."
 fi

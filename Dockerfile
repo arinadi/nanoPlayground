@@ -47,7 +47,12 @@ RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
     && chmod 0440 /etc/sudoers.d/${USERNAME}
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY bin/npg /usr/local/bin/npg
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg
+
+# Skills bawaan (read-only defaults ala omarchy /usr/share/omarchy).
+# Dipasang ke home user via `npg skills sync` (build + tiap start).
+COPY .opencode/skills /usr/share/nanoplayground/skills
 
 RUN mkdir -p /workspace && chown -R "${USERNAME}:${USERNAME}" /workspace
 
@@ -69,12 +74,16 @@ RUN npm install -g opencode-ai@latest
 RUN mkdir -p /home/${USERNAME}/.agent-of-empires /home/${USERNAME}/.claude /home/${USERNAME}/.config/opencode
 COPY --chown=${USERNAME}:${USERNAME} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
 
+# Pasang skills + CLI helper untuk user default (entrypoint sync ulang tiap start
+# agar home hasil mount pun tetap dapat skill).
+RUN npg skills sync && npg commands >/dev/null
+
 WORKDIR /workspace
 
 # Tanpa VOLUME: container jalan dengan filesystem internal secara default.
 # User yang mau persist tinggal tambah -v sendiri (lihat README).
 
-RUN aoe --version && claude --version && opencode --version
+RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []

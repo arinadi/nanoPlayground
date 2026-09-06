@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# npg — nanoPlayground helper CLI (pola omarchy: satu API hemat-token untuk agent).
+#   npg commands [--json]   daftar semua perintah (discovery satu panggilan)
+#   npg sys info             ringkasan OS/PID1/tool dalam satu output
+#   npg pkg update|add|search|rm|clean
+#   npg svc status|enable|disable|run
+#   npg skills sync|list
+set -euo pipefail
+
+NPG_SKILLS_SRC="${NPG_SKILLS_SRC:-/usr/share/nanoplayground/skills}"
+VERSION="0.1.0"
+
+is_void() { [[ -f /etc/void-release ]] && command -v xbps-install >/dev/null 2>&1; }
+need_void() {
+    if ! is_void; then
+        echo "[npg] bukan Void Linux (xbps tidak ada) — perintah '$1' ditolak agar tidak merusak host." >&2
+        exit 2
+    fi
+}
+need_root_like() { :; } # semua write dibungkus sudo oleh pemanggil; lihat tiap fungsi.
+
+# --- commands (discovery hemat-token) ---------------------------------------
+cmd_commands() {
+    local json=0; [[ "${1:-}" == "--json" ]] && json=1
+    # format: "grup aksi|ringkasan"
+    local rows=(
+        "sys info|OS, PID1, versi xbps/aoe/claude/opencode, jml service (1 panggilan)"
+        "pkg update|full update Void dua-fase (xbps dulu, lalu sistem)"
+        "pkg add <p..>|install batch idempoten (lewati yg sudah ada, 1 transaksi)"
+        "pkg search <pola>|cari paket di repo (xbps-query -Rs)"
+        "pkg rm <paket>|hapus paket (+deps tak terpakai)"
+        "pkg clean|buang orphans + cache xbps"
+        "svc status [nama]|status service runit (gagal bersih bila bukan PID1)"
+        "svc enable <nama>|enable+start (VM) / bake symlink (container)"
+        "svc disable <nama>|disable+stop"
+        "svc run <nama> [args]|jalankan daemon foreground di container"
+        "skills sync|symlink semua skill ke ~/.agents ~/.claude ~/.codex ~/.config/opencode"
+        "skills list|daftar skill yang terpasang"
+        "commands [--json]|daftar ini (discovery)"
+    )
+    if (( json )); then
+        printf '{\n  "npg": "%s",\n  "commands": [\n' "$VERSION"
+        local i=0; for r in "${rows[@]}"; do
+            (( i )) && printf ',\n'
+            printf '    {"cmd": "npg %s", "summary": "%s"}' "${r%%|*}" "${r#*|}"
+            i=1
+        done
+        printf '\n  ]\n}\n'
+    else
+        echo "[npg $VERSION] perintah tersedia:"
+        for r in "${rows[@]}"; do printf '  npg %-24s %s\n' "${r%%|*}" "${r#*|}"; done
+    fi
+}
+
+# --- sys --------------------------------------------------------------------
+cmd_sys() {
+    case "${1:-}" in
+        info)
+            echo "os=$(cat /etc/void-release 2>/dev/null || grep PRETTY /etc/os-release 2>/dev/null || uname -s)"
+            echo "pid1=$(ps -p 1 -o comm= 2>/dev/null || echo '?')"
+            echo "runit_pid1=$([ "$(ps -p 1 -o comm= 2>/dev/null)" = "runit" ] && echo yes || echo no)"
+            command -v xbps-query >/dev/null && echo "xbps=$(xbps-query -V 2>/dev/null | head -1)" || echo "xbps=missing"
+            for b in aoe claude opencode; do
+                command -v "$b" >/dev/null && echo "$b=$($b --version 2>/dev/null | head -1)" || echo "$b=missing"
+            done
+            echo "services_available=$(ls /etc/sv 2>/dev/null | wc -l)"
+            echo "services_enabled=$(ls /var/service 2>/dev/null | wc -l)"
+            ;;
+        *) echo "pakai: npg sys info" >&2; exit 2 ;;
+    esac
+}
+
+# --- pkg --------------------------------------------------------------------
+cmd_pkg() {
+    need_void "pkg $1"
+    local op="${1:-}"; shift || true
+    case "$op" in
+        update)
+            sudo xbps-install -Suy xbps && sudo xbps-install -Suy
+            ;;
+        add)
+            (( $# )) || { echo "pakai: npg pkg add <paket...>" >&2; exit 2; }
+            local missing=()
+            for p in "$@"; do
+                xbps-query -S "$p" >/dev/null 2>&1 || missing+=("$p")
+            done
+            if (( ${#missing[@]} == 0 )); then echo "[npg] semua sudah terpasang: $*"; return 0; fi
+            echo "[npg] install: ${missing[*]}"
+            sudo xbps-install -Sy "${missing[@]}"
+            for p in "${missing[@]}"; do xbps-query -S "$p" >/dev/null || { echo "[npg] verifikasi gagal: $p" >&2; exit 1; }; done
+            ;;
+        search)
+            (( $# )) || { echo "pakai: npg pkg search <pola>" >&2; exit 2; }
+            xbps-query -Rs "$1" | head -30
+            ;;
+        rm)
+            (( $# )) || { echo "pakai: npg pkg rm <paket>" >&2; exit 2; }
+            sudo xbps-remove -R "$1"
+            ;;
+        clean)
+            sudo xbps-remove -Oo -y
+            ;;
+        *) echo "pakai: npg pkg {update|add|search|rm|clean}" >&2; exit 2 ;;
+    esac
+}
+
+# --- svc --------------------------------------------------------------------
+cmd_svc() {
+    need_void "svc $1"
+    local op="${1:-}"; shift || true
+    case "$op" in
+        status)
+            if [[ $# -eq 0 ]]; then sv status /var/service/* 2>&1 | head -30
+            else sv status "$1" 2>&1; fi
+            ;;
+        enable)
+            (( $# )) || { echo "pakai: npg svc enable <nama>" >&2; exit 2; }
+            [[ -d "/etc/sv/$1" ]] || { echo "[npg] service tidak ada: /etc/sv/$1" >&2; exit 1; }
+            if [[ "$(ps -p 1 -o comm=)" == "runit" ]]; then
+                sudo ln -sfn "/etc/sv/$1" /var/service/
+            else
+                # Di container: bake untuk boot VM + beri tahu cara foreground
+                sudo ln -sfn "/etc/sv/$1" /etc/runit/runsvdir/default/ 2>/dev/null || sudo ln -sfn "/etc/sv/$1" /var/service/
+                echo "[npg] bukan runit PID1 — enable di-bake; jalankan foreground via: npg svc run $1"
+            fi
+            ;;
+        disable)
+            (( $# )) || { echo "pakai: npg svc disable <nama>" >&2; exit 2; }
+            sudo rm -f "/var/service/$1" "/etc/runit/runsvdir/default/$1"
+            ;;
+        run)
+            (( $# )) || { echo "pakai: npg svc run <nama> [args...]" >&2; exit 2; }
+            local svc="$1"; shift
+            if [[ -x "/etc/sv/$svc/run" ]]; then exec "/etc/sv/$svc/run" "$@"
+            else echo "[npg] tidak ada /etc/sv/$svc/run" >&2; exit 1; fi
+            ;;
+        *) echo "pakai: npg svc {status|enable|disable|run}" >&2; exit 2 ;;
+    esac
+}
+
+# --- skills (installer symlink ala omarchy) ----------------------------------
+SKILL_TARGETS=(
+    "$HOME/.agents/skills"
+    "$HOME/.claude/skills"
+    "$HOME/.codex/skills"
+    "$HOME/.config/opencode/skills"
+)
+cmd_skills() {
+    case "${1:-}" in
+        sync)
+            local src="$NPG_SKILLS_SRC"
+            [[ -d "$src" ]] || { echo "[npg] sumber skill tidak ada: $src" >&2; exit 1; }
+            local n=0
+            for d in "$src"/*/; do
+                [[ -d "$d" ]] || continue
+                local name; name="$(basename "$d")"
+                for t in "${SKILL_TARGETS[@]}"; do
+                    mkdir -p "$t"
+                    ln -sfn "$d" "$t/$name"
+                done
+                n=$((n+1))
+            done
+            echo "[npg] $n skill di-sync dari $src"
+            ;;
+        list)
+            for t in "${SKILL_TARGETS[@]}"; do
+                echo "== $t"; ls -1 "$t" 2>/dev/null || echo "(kosong)"
+            done
+            ;;
+        *) echo "pakai: npg skills {sync|list}" >&2; exit 2 ;;
+    esac
+}
+
+# --- dispatch ---------------------------------------------------------------
+main() {
+    local grp="${1:-commands}"; shift || true
+    case "$grp" in
+        commands) cmd_commands "$@" ;;
+        sys)      cmd_sys "$@" ;;
+        pkg)      cmd_pkg "$@" ;;
+        svc)      cmd_svc "$@" ;;
+        skills)   cmd_skills "$@" ;;
+        -h|--help|help) cmd_commands ;;
+        -V|--version|version) echo "npg $VERSION" ;;
+        *) echo "[npg] perintah tidak dikenal: $grp (coba: npg commands)" >&2; exit 2 ;;
+    esac
+}
+main "$@"
