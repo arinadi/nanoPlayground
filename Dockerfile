@@ -157,8 +157,10 @@ RUN pip3 install --no-cache-dir playwright crawl4ai \
     && rm -rf /root/.cache /tmp/*
 
 # --- Create non-root user `admin` --------------------------------------------
-RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
-    && useradd --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" \
+# Ubuntu 26.04 minimal image already ships a GID/UID 1000, so be tolerant
+# (standard Docker pattern) — create admin only if not present yet.
+RUN groupadd --gid "${USER_GID}" "${USERNAME}" 2>/dev/null || true \
+    && useradd --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" 2>/dev/null || true \
     && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
     && chmod 0440 /etc/sudoers.d/${USERNAME}
 
