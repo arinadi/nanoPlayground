@@ -92,6 +92,7 @@ Read the matching file on demand, don't dump all into context:
 
 - Package ops (install/search/remove/cache/hold): `references/packages.md`
 - Services (systemd enable/start/conf, container limits): `references/services.md`
+- Task runner (`just` recipes): `references/just.md`
 
 ## Validate after every change
 
