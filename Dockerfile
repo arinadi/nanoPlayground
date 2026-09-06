@@ -124,9 +124,9 @@ RUN pip3 install --no-cache-dir --no-compile trafilatura \
     && find /usr/lib/python* -type d -name '__pycache__' -prune -exec rm -rf {} + \
     && rm -rf /root/.cache && trafilatura --help >/dev/null
 
-# --- Remote desktop / noVNC stack ----------------------------------------------
-# Headless X + a window manager, shared over VNC, bridged to the browser via
-# noVNC + websockify. `start-desktop.sh` wires it all together at runtime.
+# --- Remote desktop / VNC stack -------------------------------------------------
+# Headless X + a window manager, shared over VNC for native client apps
+# (bVNC, RealVNC Viewer). `start-desktop.sh` wires it all together at runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb \
         xauth \
@@ -135,15 +135,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xterm \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
-
-# --- noVNC + websockify ----------------------------------------------------------
-RUN pip3 install --no-cache-dir websockify \
-    && curl -fsSL -o /tmp/novnc.tar.gz \
-        https://github.com/novnc/noVNC/archive/refs/tags/v1.5.0.tar.gz \
-    && mkdir -p /opt/novnc \
-    && tar -xzf /tmp/novnc.tar.gz -C /opt/novnc --strip-components=1 \
-    && rm -f /tmp/novnc.tar.gz \
-    && test -f /opt/novnc/vnc.html
 
 # --- Firefox (from playwright; snap-free for containers) -------------------------
 # Ubuntu's `firefox` apt package is a snap transition stub that won't run in a
@@ -230,7 +221,7 @@ RUN aoe --version && claude --version && opencode --version && npg commands >/de
     && rtk --version && ast-grep --version && yq --version && just --version \
     && gh --version && trafilatura --help >/dev/null \
     && pnpm --version && awesome --version \
-    && command -v websockify && command -v playwright-install \
+    && command -v playwright-install \
     && python3 -c "import playwright, crawl4ai"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

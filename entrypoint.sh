@@ -8,8 +8,9 @@ set -euo pipefail
 #   * On `docker run` / `proot-distro` the ONLY thing that auto-starts is the
 #     interactive `aoe` TUI (see below).
 #   * The aoe WEB dashboard does NOT auto-start; it is opt-in via AOE_WEB=1.
-#   * The noVNC desktop (Xvfb/awesome/x11vnc/websockify) is NEVER auto-started;
-#     run `start-desktop.sh` manually when you want it.
+#   * The VNC desktop (Xvfb/awesome/x11vnc) is NEVER auto-started;
+#     run `start-desktop.sh` manually when you want it, then connect a
+#     VNC client app to 127.0.0.1:5900 (no password).
 #
 # Default behavior (docker run -it image):
 #   -> open the `aoe` TUI right away, no Docker sandbox is created

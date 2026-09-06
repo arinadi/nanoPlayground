@@ -2,12 +2,12 @@
 name: playground-manage
 description: >
   Manage the nanoPlayground runtime itself — the Agent of Empires (aoe) session
-  manager, the headless noVNC desktop (Xvfb/awesome/x11vnc/websockify), and the
+  manager, the headless VNC desktop (Xvfb/awesome/x11vnc), and the
   proot-distro lifecycle on the host. Use when starting/stopping agent sessions,
   the aoe daemon/web dashboard, the remote desktop, or when a container must be
   reinstalled/upgraded. Complements ubuntu-manage (packages/services), which is
-  the right skill for apt/systemd. Triggers: aoe, start-desktop, noVNC, websockify,
-  Xvfb, proot-distro, pd login, playground, session, /opt/novnc.
+  the right skill for apt/systemd. Triggers: aoe, start-desktop, stop-desktop,
+  VNC, x11vnc, Xvfb, proot-distro, pd login, playground, session.
 license: MIT
 compatibility: opencode
 metadata:
@@ -20,7 +20,7 @@ metadata:
 Manage the nanoPlayground stack, not the OS. Ubuntu itself (apt/systemd) is
 handled by the sibling `ubuntu-manage` skill. This skill owns everything above
 the OS: the **aoe** session manager, the helper CLIs (`npg`, `rtk`), the
-headless **noVNC desktop** stack we ship, and the **proot-distro** lifecycle.
+headless **VNC desktop** stack we ship, and the **proot-distro** lifecycle.
 
 ## Detect where we are first (shared with ubuntu-manage)
 
@@ -44,7 +44,7 @@ systemctl is-system-running 2>/dev/null || echo "no systemd bus"
 It IS the playground. Everything else serves it.
 
 **Start policy:** on `docker run` / `proot-distro`, ONLY the interactive `aoe`
-TUI auto-starts. The web dashboard and the noVNC desktop never auto-start —
+TUI auto-starts. The web dashboard and the VNC desktop never auto-start —
 they are opt-in / on-demand (below).
 
 - `aoe` (no args) → interactive TUI dashboard. Don't run a TUI when not a TTY.
@@ -69,15 +69,18 @@ they are opt-in / on-demand (below).
   register hooks; `rtk gain` reports savings. Prefer plain shell commands; the
   hook rewrites them.
 
-## Desktop / noVNC stack (this repo now ships it)
+## Desktop / VNC stack (this repo now ships it)
 
-`bin/start-desktop.sh` wires Xvfb → awesome → x11vnc → websockify → noVNC.
-Components live at `/opt/novnc`; browsers at `/ms-playwright`.
+`bin/start-desktop.sh` wires Xvfb → awesome → x11vnc. Connect with a native
+VNC client app (bVNC, RealVNC Viewer). Stop with `bin/stop-desktop.sh`.
 
 - **Never auto-starts.** Start it explicitly when you need a GUI:
-  `start-desktop.sh` (defaults `:1`, 1440x900, VNC :5900, web :6080).
-- Access in a browser: `http://<host>:6080/vnc.html`.
-- Tune via env: `DISPLAY_NUM`, `RESOLUTION`, `VNC_PORT`, `WEB_PORT`, `NOVNC_DIR`.
+  `start-desktop.sh` (defaults `:1`, 800x1280 portrait, VNC 127.0.0.1:5900,
+  no password). Stop: `stop-desktop.sh` (idempotent, safe when stopped).
+- Access: `127.0.0.1:5900` from a VNC app on the device (no password).
+  bVNC offers a simulated-touchpad input mode. From a remote machine use
+  Termux `adb reverse tcp:5900 tcp:5900` (or a port-forward).
+- Tune via env: `DISPLAY_NUM`, `RESOLUTION`, `VNC_PORT`.
 - Headless browser automation (crawl4ai/playwright/firefox) needs no desktop;
   launch headed under the VNC display to watch it.
 

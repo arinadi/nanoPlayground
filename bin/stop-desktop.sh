@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# stop-desktop.sh — stop the headless noVNC desktop started by start-desktop.sh.
-#   Kills Xvfb + awesome (+ dbus-run-session wrapper) + x11vnc + websockify
+# stop-desktop.sh — stop the headless VNC desktop started by start-desktop.sh.
+#   Kills Xvfb + awesome (+ dbus-run-session wrapper) + x11vnc
 #   via their /tmp PID files. Safe to run when already stopped.
 #
 #   Usage:
@@ -8,7 +8,7 @@
 set -euo pipefail
 
 stopped=0
-for f in websockify x11vnc awesome xvfb; do
+for f in x11vnc awesome xvfb; do
     pidfile="/tmp/${f}.pid"
     if [ ! -f "${pidfile}" ]; then
         echo "[desktop] ${f}: not running (no pid file)"

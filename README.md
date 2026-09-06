@@ -139,7 +139,7 @@ the image).
 ### Built-in agent skills
 
 The `ubuntu-manage` (apt/systemd) and `playground-manage` (aoe sessions,
-noVNC desktop, proot lifecycle) skills are baked into
+VNC desktop, proot lifecycle) skills are baked into
 `/usr/share/nanoplayground/skills/`
 and auto-synced on every container start into `~/.agents/skills/`,
 `~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`

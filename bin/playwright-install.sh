@@ -4,7 +4,7 @@
 # The browser is intentionally NOT baked into the image: cdn.playwright.dev is
 # flaky in CI (ECONNRESET / HTTP 400 / self-signed), so the build skips it.
 # Run this once at runtime to make firefox available for crawl4ai/playwright
-# and for the noVNC desktop. Idempotent and retried.
+# and for the VNC desktop. Idempotent and retried.
 #
 #   playwright-install            # install with system deps + retries
 set -euo pipefail
