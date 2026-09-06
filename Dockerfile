@@ -157,12 +157,21 @@ RUN pip3 install --no-cache-dir playwright crawl4ai \
     && rm -rf /root/.cache /tmp/*
 
 # --- Create non-root user `admin` --------------------------------------------
-# Ubuntu 26.04 minimal image already ships a GID/UID 1000, so be tolerant
-# (standard Docker pattern) — create admin only if not present yet.
-RUN groupadd --gid "${USER_GID}" "${USERNAME}" 2>/dev/null || true \
-    && useradd --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}" 2>/dev/null || true \
-    && echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME} \
-    && chmod 0440 /etc/sudoers.d/${USERNAME}
+# ubuntu:26.04 minimal image already ships a user at GID/UID 1000. If admin
+# doesn't exist yet, repurpose that user as `admin` (keeps UID/GID 1000 for
+# host mount compat); otherwise create admin normally.
+RUN set -eux; \
+    if id "${USERNAME}" >/dev/null 2>&1; then \
+        :; \
+    elif getent passwd "${USER_UID}" >/dev/null 2>&1; then \
+        _old="$(getent passwd "${USER_UID}" | cut -d: -f1)"; \
+        usermod -l "${USERNAME}" -s /bin/bash -m -d "/home/${USERNAME}" "${_old}"; \
+    else \
+        groupadd --gid "${USER_GID}" "${USERNAME}" 2>/dev/null || true; \
+        useradd --uid "${USER_UID}" --gid "${USER_GID}" -m -s /bin/bash "${USERNAME}"; \
+    fi; \
+    echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME}; \
+    chmod 0440 /etc/sudoers.d/${USERNAME}
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY bin/npg /usr/local/bin/npg
