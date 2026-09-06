@@ -129,8 +129,14 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           for f in *; do
-            docker buildx imagetools inspect --raw "${{ env.IMAGE }}@sha256:$f" \
-              | python3 -c 'import json,sys; d=json.load(sys.stdin); p=d.get("platform",{}); s=sum(l["size"] for l in d["layers"])//1024//1024; print(p.get("os"), p.get("architecture"), s, "MB compressed")'
+            kids=$(docker buildx imagetools inspect --raw "${{ env.IMAGE }}@sha256:$f" | python3 -c 'import json,sys; d=json.load(sys.stdin); ms=d.get("manifests",[]); ks=[m["digest"].split(":")[1] for m in ms if m.get("annotations",{}).get("vnd.docker.reference.type")!="attestation-manifest"]; print(" ".join(ks) if ks else "SELF")')
+            total=0
+            for c in $kids; do
+              ref=$f; [ "$c" != "SELF" ] && ref=$c
+              s=$(docker buildx imagetools inspect --raw "${{ env.IMAGE }}@sha256:$ref" | python3 -c 'import json,sys; print(sum(l["size"] for l in json.load(sys.stdin).get("layers",[])))')
+              total=$((total + s))
+            done
+            echo "sha256:$f = $((total/1024/1024)) MB compressed"
           done
 
       # Make the GHCR package public so `docker pull` needs no login.
