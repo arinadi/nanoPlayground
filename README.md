@@ -138,7 +138,9 @@ the image).
 
 ### Built-in agent skills
 
-The `ubuntu-manage` skill is baked into `/usr/share/nanoplayground/skills/`
+The `ubuntu-manage` (apt/systemd) and `playground-manage` (aoe sessions,
+noVNC desktop, proot lifecycle) skills are baked into
+`/usr/share/nanoplayground/skills/`
 and auto-synced on every container start into `~/.agents/skills/`,
 `~/.claude/skills/`, `~/.codex/skills/`, `~/.config/opencode/skills/`
 (Omarchy-style symlink pattern). In this repo the source lives in
