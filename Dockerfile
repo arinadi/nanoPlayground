@@ -28,6 +28,7 @@ ENV LANG=C.UTF-8 \
 RUN xbps-install -Suy xbps && \
     xbps-install -Suy && \
     xbps-install -y \
+        bash \
         tmux \
         git \
         curl \
