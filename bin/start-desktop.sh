@@ -74,8 +74,11 @@ echo $! > /tmp/awesome.pid
 sleep 2
 
 echo "[desktop] starting x11vnc on 127.0.0.1:${VNC_PORT}"
+# -defer/-wait lowered from 20ms defaults: loopback link to AVNC is free,
+# so trade a little CPU for snappier pointer response.
 x11vnc -display "${DISPLAY}" -rfbport "${VNC_PORT}" \
-    -localhost -forever -shared -threads -noxdamage -ncache 0 -nopw -quiet &
+    -localhost -forever -shared -threads -noxdamage -ncache 0 -nopw -quiet \
+    -defer 10 -wait 10 &
 echo $! > /tmp/x11vnc.pid
 # Readiness wait: RFB banner instead of a fixed sleep.
 BANNER=""
