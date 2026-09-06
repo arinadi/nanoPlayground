@@ -5,8 +5,9 @@ The image ships a headless X desktop you can reach from a browser:
 
 - noVNC client + static files: `/opt/novnc` (`vnc.html`).
 - Shared playwright browsers: `/ms-playwright`.
-- System firefox: `/usr/local/bin/firefox` (symlink → `/opt/firefox/firefox`).
-- Helper: `/usr/local/bin/start-desktop.sh` (source in `bin/`).
+- Firefox: `playwright-install` (installs playwright's firefox + creates the
+  `/usr/local/bin/firefox` symlink). It is NOT baked at build — `cdn.playwright.dev`
+  is flaky in CI — so run `playwright-install` once before first headed use.
 
 ## Start
 
@@ -34,7 +35,8 @@ and the helper's `cleanup()` traps EXIT/INT/TERM to stop them all.
 
 ## Headless browser automation (no desktop needed)
 
-crawl4ai / playwright drive firefox **headless** and need no X:
+crawl4ai / playwright drive firefox **headless** and need no X. First make sure
+the browser is present: `playwright-install` (retries the flaky CDN).
 
 ```bash
 python3 - <<'PY'

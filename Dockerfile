@@ -22,6 +22,7 @@ ENV LANG=C.UTF-8 \
     RTK_TELEMETRY_DISABLED=1 \
     DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
 # --- Enable universe ------------------------------------------------------------
@@ -146,18 +147,13 @@ RUN pip3 install --no-cache-dir websockify \
 # --- Firefox (from playwright; snap-free for containers) -------------------------
 # Ubuntu's `firefox` apt package is a snap transition stub that won't run in a
 # container, and download.mozilla.org has no aarch64 Linux tarball. Playwright
-# ships a full, arch-agnostic Firefox build we already pull below — we just
-# expose it as /usr/local/bin/firefox for convenience.
+# ships a full, arch-agnostic Firefox. We install the library here but do NOT
+# download the browser at build time — cdn.playwright.dev is notoriously flaky
+# in CI (ECONNRESET/400/self-signed). Run `playwright-install` once at runtime
+# to fetch firefox + the /usr/local/bin/firefox symlink.
 
 # --- crawl4ai + playwright (browser automation) -----------------------------------
-# Installed to a shared /ms-playwright so both root (build) and the `admin`
-# runtime user find the same browser binaries. `--with-deps` lets playwright
-# pull every system library firefox needs (via apt) so it also runs headed in
-# the noVNC desktop.
 RUN pip3 install --no-cache-dir playwright crawl4ai \
-    && playwright install --with-deps firefox \
-    && ln -sf "$(find /ms-playwright -maxdepth 2 -type f -name firefox | head -1)" \
-        /usr/local/bin/firefox \
     && rm -rf /root/.cache /tmp/*
 
 # --- Create non-root user `admin` --------------------------------------------
@@ -169,7 +165,9 @@ RUN groupadd --gid "${USER_GID}" "${USERNAME}" \
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY bin/npg /usr/local/bin/npg
 COPY bin/start-desktop.sh /usr/local/bin/start-desktop.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg /usr/local/bin/start-desktop.sh
+COPY bin/playwright-install.sh /usr/local/bin/playwright-install
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg \
+    /usr/local/bin/start-desktop.sh /usr/local/bin/playwright-install
 
 # Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
 # Installed into the user home via `npg skills sync` (build + every start).
@@ -219,8 +217,8 @@ WORKDIR /workspace
 RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null \
     && rtk --version && ast-grep --version && yq --version && just --version \
     && gh --version && trafilatura --help >/dev/null \
-    && pnpm --version && test -x /usr/local/bin/firefox && awesome --version \
-    && command -v websockify \
+    && pnpm --version && awesome --version \
+    && command -v websockify && command -v playwright-install \
     && python3 -c "import playwright, crawl4ai"
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
