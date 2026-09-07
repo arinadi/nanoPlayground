@@ -9,7 +9,7 @@
 
 A ready-to-run Docker image: one `docker run` drops you into the
 [Agent of Empires (aoe)](https://www.agent-of-empires.com/) TUI with
-**Claude Code** and **OpenCode** preinstalled. Skills, MCPs, and providers
+**OpenCode** preinstalled (Claude Code installs on demand at runtime). Skills, MCPs, and providers
 are managed through `aoe` itself (press `m` for MCP, see each agent's docs
 for skills/providers) — no manual config-file editing needed.
 
@@ -44,8 +44,9 @@ docker run -it --rm \
 
 ## Build
 
-Single base: **Ubuntu 26.04 LTS** (glibc, so the `aoe` binary with its
-glibc >= 2.28 requirement runs; apt/systemd for packages & services).
+SPIKE branch: **Debian 13 (trixie-slim)** base (glibc 2.41, so the `aoe`
+binary with its glibc >= 2.28 requirement runs; apt/systemd for packages
+& services). Main stays on **Ubuntu 26.04 LTS** until the spike is accepted.
 
 Match `USER_UID`/`USER_GID` to your host user (`id -u` / `id -g`) so files
 created through the `/workspace` bind-mount aren't owned by a foreign UID
@@ -132,7 +133,8 @@ Beyond `rg`/`fzf`/`git`, every container ships proven agent tools:
 | `sqlite3` | Local data work | `sqlite3 db.sqlite` |
 
 Deliberately **not** baked (heavy or key-gated, use on demand): `crawl4ai`
-+ Chromium, `pandoc`, full Playwright browsers, `repomix`
++ `playwright` pip packages (`crawl4ai-install`), full Playwright browsers
+(`playwright-install`), `claude-code` (npm, on demand), `pandoc`, `repomix`
 (`npx -y repomix --compress`), Tavily/Firecrawl (API keys via env, never in
 the image).
 

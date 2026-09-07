@@ -10,10 +10,12 @@ set -euo pipefail
 NPG_SKILLS_SRC="${NPG_SKILLS_SRC:-/usr/share/nanoplayground/skills}"
 VERSION="0.1.0"
 
-is_ubuntu() { [[ -f /etc/os-release ]] && grep -q "^ID=ubuntu" /etc/os-release; }
+# SPIKE: accept Debian as well as Ubuntu (both apt-based). Function name kept
+# to avoid touching every caller on this branch.
+is_ubuntu() { [[ -f /etc/os-release ]] && grep -Eq "^ID=(ubuntu|debian)" /etc/os-release; }
 need_ubuntu() {
     if ! is_ubuntu; then
-        echo "[npg] not Ubuntu Linux (no apt) — refusing '$1' so the host stays safe." >&2
+        echo "[npg] not Debian/Ubuntu Linux (no apt) — refusing '$1' so the host stays safe." >&2
         exit 2
     fi
 }
@@ -25,7 +27,7 @@ cmd_commands() {
     # format: "group action|summary"
     local rows=(
         "sys info|OS, PID1, apt/aoe/claude/opencode versions, service counts (1 call)"
-        "pkg update|safe Ubuntu full update (apt update, then apt upgrade)"
+        "pkg update|safe Debian/Ubuntu full update (apt update, then apt upgrade)"
         "pkg add <p..>|idempotent batch install (skip installed, 1 transaction)"
         "pkg search <pattern>|search repo packages (apt search)"
         "pkg rm <package>|remove package (+ unused deps)"

@@ -8,7 +8,7 @@ set -euo pipefail
 #   * On `docker run` / `proot-distro` the ONLY thing that auto-starts is the
 #     interactive `aoe` TUI (see below).
 #   * The aoe WEB dashboard does NOT auto-start; it is opt-in via AOE_WEB=1.
-#   * The VNC desktop (Xvfb/awesome/x11vnc) is NEVER auto-started;
+#   * The VNC desktop (Xvfb/openbox/x11vnc) is NEVER auto-started;
 #     run `start-desktop.sh` manually when you want it, then connect a
 #     VNC client app to 127.0.0.1:5900 (no password).
 #
@@ -50,7 +50,7 @@ if command -v rtk >/dev/null 2>&1; then
 fi
 
 if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
-    echo "[nanoPlayground] ANTHROPIC_API_KEY is empty — Claude Code will ask for login/API key inside the TUI."
+    echo "[nanoPlayground] ANTHROPIC_API_KEY is empty — Claude Code (on-demand install) will ask for login/API key inside the TUI."
 fi
 
 if [ -z "${GH_TOKEN:-}" ] && [ -z "${GITHUB_TOKEN:-}" ]; then
@@ -84,7 +84,7 @@ if [ "${AOE_WEB:-0}" = "1" ]; then
     try_start_web || true
 fi
 
-# If the user overrides CMD (e.g. docker run image bash, or image claude),
+# If the user overrides CMD (e.g. docker run image bash, or image opencode),
 # run it as-is. With no arguments at all -> open the TUI.
 # Without a TTY (e.g. docker run without -it in CI), don't force a TUI that
 # would hang — print versions + usage, then exit 0.

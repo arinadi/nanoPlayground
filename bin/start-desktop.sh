@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # start-desktop.sh — headless desktop via native VNC for nanoPlayground.
-#   Runs Xvfb + awesome WM, shared over VNC with x11vnc. Connect with any
+#   Runs Xvfb + Openbox WM, shared over VNC with x11vnc. Connect with any
 #   VNC client app (bVNC, RealVNC Viewer): host 127.0.0.1, port 5900,
 #   no password.
 #
@@ -24,7 +24,7 @@ DISP_NUM="${DISPLAY_NUM#:}"   # ":1" -> "1" for /tmp/.X11-unix/X1
 
 cleanup() {
     echo "[desktop] shutdown..."
-    for f in xvfb awesome x11vnc; do
+    for f in xvfb openbox x11vnc; do
         if [ -f "/tmp/${f}.pid" ]; then
             kill "$(cat "/tmp/${f}.pid")" 2>/dev/null || true
             rm -f "/tmp/${f}.pid"
@@ -33,12 +33,20 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# --- preflight: desktop stack installed? (on-demand via desktop-install) ---
+for b in Xvfb x11vnc openbox; do
+    if ! command -v "$b" >/dev/null 2>&1; then
+        echo "[desktop] ERROR: $b not found — run desktop-install first." >&2
+        exit 1
+    fi
+done
+
 # --- preflight (proot: no systemd, non-root uid) ---
 mkdir -p /tmp/.X11-unix
 chmod 1777 /tmp/.X11-unix 2>/dev/null || true
 touch "${AUTH}"
 # Drop dead PID files from a previous run.
-for f in xvfb awesome x11vnc; do
+for f in xvfb openbox x11vnc; do
     if [ -f "/tmp/${f}.pid" ] && ! kill -0 "$(cat "/tmp/${f}.pid")" 2>/dev/null; then
         rm -f "/tmp/${f}.pid"
     fi
@@ -49,12 +57,12 @@ if python3 -c "import socket,sys; s=socket.create_connection(('127.0.0.1',int(sy
     exit 1
 fi
 
-# --- D-Bus: none under proot, give awesome a private session bus if possible ---
+# --- D-Bus: none under proot, give openbox a private session bus if possible ---
 if command -v dbus-run-session >/dev/null 2>&1; then
-    WM_CMD="dbus-run-session -- awesome"
+    WM_CMD="dbus-run-session -- openbox"
 else
     unset DBUS_SESSION_BUS_ADDRESS || true
-    WM_CMD="awesome"
+    WM_CMD="openbox"
 fi
 
 echo "[desktop] starting Xvfb ${DISPLAY_NUM} (${RESOLUTION})"
@@ -68,9 +76,9 @@ done
 [ -S "/tmp/.X11-unix/X${DISP_NUM}" ] || { echo "[desktop] ERROR: Xvfb socket missing" >&2; exit 1; }
 
 export DISPLAY="${DISPLAY_NUM}"
-echo "[desktop] starting awesome wm (${WM_CMD})"
+echo "[desktop] starting openbox wm (${WM_CMD})"
 ${WM_CMD} &
-echo $! > /tmp/awesome.pid
+echo $! > /tmp/openbox.pid
 sleep 2
 
 echo "[desktop] starting x11vnc on 127.0.0.1:${VNC_PORT}"
