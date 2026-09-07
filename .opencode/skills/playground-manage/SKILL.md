@@ -2,7 +2,7 @@
 name: playground-manage
 description: >
   Manage the nanoPlayground runtime itself — the Agent of Empires (aoe) session
-  manager, the headless VNC desktop (Xvfb/awesome/x11vnc), and the
+  manager, the headless VNC desktop (Xvfb/openbox/x11vnc), and the
   proot-distro lifecycle on the host. Use when starting/stopping agent sessions,
   the aoe daemon/web dashboard, the remote desktop, or when a container must be
   reinstalled/upgraded. Complements ubuntu-manage (packages/services), which is
@@ -12,13 +12,14 @@ license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers
-  os: ubuntu-26.04
+  os: debian-13 # SPIKE (was ubuntu-26.04)
 ---
 
 # playground-manage
 
-Manage the nanoPlayground stack, not the OS. Ubuntu itself (apt/systemd) is
-handled by the sibling `ubuntu-manage` skill. This skill owns everything above
+Manage the nanoPlayground stack, not the OS. OS packages/services are
+handled by the sibling `ubuntu-manage` skill (SPIKE: Debian 13 base, skill
+rename deferred). This skill owns everything above
 the OS: the **aoe** session manager, the helper CLIs (`npg`, `rtk`), the
 headless **VNC desktop** stack we ship, and the **proot-distro** lifecycle.
 
@@ -71,18 +72,20 @@ they are opt-in / on-demand (below).
 
 ## Desktop / VNC stack (this repo now ships it)
 
-`bin/start-desktop.sh` wires Xvfb → awesome → x11vnc. Connect with a native
+`bin/start-desktop.sh` wires Xvfb → openbox → x11vnc. Connect with a native
 VNC client app (bVNC, RealVNC Viewer). Stop with `bin/stop-desktop.sh`.
 
-- **Never auto-starts.** Start it explicitly when you need a GUI:
+- **Never auto-starts, and not preinstalled.** Set up once per container:
+  `desktop-install`, then start explicitly when you need a GUI:
   `start-desktop.sh` (defaults `:1`, 800x1280 portrait, VNC 127.0.0.1:5900,
   no password). Stop: `stop-desktop.sh` (idempotent, safe when stopped).
 - Access: `127.0.0.1:5900` from a VNC app on the device (no password).
   bVNC offers a simulated-touchpad input mode. From a remote machine use
   Termux `adb reverse tcp:5900 tcp:5900` (or a port-forward).
 - Tune via env: `DISPLAY_NUM`, `RESOLUTION`, `VNC_PORT`.
-- Headless browser automation (crawl4ai/playwright/firefox) needs no desktop;
-  launch headed under the VNC display to watch it.
+- Headless browser automation (crawl4ai/playwright/firefox) is on demand, not
+  baked: `crawl4ai-install` then `playwright-install`; needs no desktop.
+  Launch headed under the VNC display to watch it.
 
 See `references/desktop.md` for runnable examples and debugging.
 

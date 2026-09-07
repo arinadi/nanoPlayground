@@ -10,15 +10,15 @@ license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers
-  os: ubuntu-26.04
+  os: debian-13 # SPIKE (was ubuntu-26.04; rename deferred)
 ---
 
-# ubuntu-manage
+# ubuntu-manage (SPIKE: Debian 13 base)
 
-Manage Ubuntu 26.04 LTS accurately. Ubuntu is a fixed-release Debian-derived
-distro, uses **apt/dpkg** (not xbps/apk/dnf) and **systemd** (not runit).
-Base image here is `ubuntu:26.04` (glibc, required by the `aoe` binary which
-needs glibc >= 2.28).
+Manage Debian 13 (trixie-slim) accurately. Debian stable uses **apt/dpkg**
+(not xbps/apk/dnf) and **systemd** (not runit) on booted hosts.
+Base image here is `debian:13-slim` (glibc 2.41, satisfies the `aoe` binary
+which needs glibc >= 2.28).
 
 ## Environment awareness — proot vs docker/podman vs VM (CHECK FIRST)
 

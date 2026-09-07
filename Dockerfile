@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 #
 # nanoPlayground — Instant, Fun & Agentic Playground for AI coding agents.
-# Ubuntu 26.04 LTS base. Runs as non-root user `admin`, not root.
+# SPIKE: Debian 13 (trixie-slim) base + Openbox. Runs as non-root user `admin`, not root.
 #
 # Build:  docker build \
 #           --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g) \
 #           -t nanoplayground .
 
-FROM ubuntu:26.04
+FROM debian:13-slim
 
 LABEL org.opencontainers.image.title="nanoPlayground" \
       org.opencontainers.image.description="Instant, fun & agentic playground: aoe TUI + Claude Code + OpenCode, runs with plain docker run" \
@@ -25,23 +25,19 @@ ENV LANG=C.UTF-8 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
-# --- Enable universe + base deps in ONE layer (still as root) --------------------
-# Combined on purpose: a separate `apt-get update` layer before the install
-# is throwaway work and an extra layer. Cache mounts keep /var/cache/apt and
-# /var/lib/apt out of the final layer for faster rebuilds without growing size.
-# The minimal ubuntu:26.04 container image ships only `main`. The desktop and
-# automation stack (xvfb, x11vnc, awesome, xterm, and friends) lives in
-# `universe`, so enable it across all sources before the first install.
-# Must-have (verified for Ubuntu 26.04): jq, fd, ctags (universal-ctags), bat,
-# delta, eza, sqlite3, python3 + pip. yq / ast-grep / just / gh (github-cli)
-# are NOT apt packages on Ubuntu (snap-only / unpackaged) — they come from
-# static binaries in the next step.
-# Nice-to-have: bat, delta, eza, sqlite3.
+# --- Base deps in ONE layer (still as root) --------------------------------------
+# Cache mounts keep /var/cache/apt and /var/lib/apt out of the final layer for
+# faster rebuilds without growing size.
+# Debian trixie-slim ships `main` by default and all packages below live in
+# `main`, so no extra component setup is needed (unlike Ubuntu `universe`).
+# Must-have (to verify on trixie): jq, fd (fd-find), ctags (universal-ctags),
+# bat (binary `batcat`), git-delta (binary `delta`), eza, sqlite3, python3 + pip.
+# yq / ast-grep / just / gh (github-cli) are NOT apt packages on Debian either —
+# they come from static binaries in the next step.
+# Nice-to-have: bat, git-delta, eza, sqlite3.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    sed -i 's/^Components: main$/Components: main universe/g' \
-        /etc/apt/sources.list.d/ubuntu.sources \
-    && apt-get update && apt-get install -y --no-install-recommends \
+    apt-get update && apt-get install -y --no-install-recommends \
         bash \
         tmux \
         git \
@@ -64,7 +60,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         fd-find \
         universal-ctags \
         bat \
-        delta \
+        git-delta \
         eza \
         sqlite3 \
         python3 \
@@ -73,8 +69,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
 
-# --- Agent tools missing from the Ubuntu archive --------------------------------
-# yq & ast-grep are snap-only on Ubuntu (no apt package), and just & github-cli
+# --- Agent tools missing from the Debian archive ----------------------------------
+# yq & ast-grep have no apt package on Debian, and just & github-cli
 # are unpackaged there, so `apt-get install` for them fails the build (exit 100).
 # Pull static binaries instead. TARGETARCH-aware.
 ARG TARGETARCH
@@ -127,36 +123,23 @@ RUN pip3 install --no-cache-dir --no-compile trafilatura \
     && find /usr/lib/python* -type d -name '__pycache__' -prune -exec rm -rf {} + \
     && rm -rf /root/.cache /tmp/* /var/tmp/* && trafilatura --help >/dev/null
 
-# --- Remote desktop / VNC stack -------------------------------------------------
-# Headless X + a window manager, shared over VNC for native client apps
-# (bVNC, RealVNC Viewer). `start-desktop.sh` wires it all together at runtime.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-        xvfb \
-        xauth \
-        x11vnc \
-        awesome \
-        xterm \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /var/log/apt/
+# --- Remote desktop / VNC stack: ON DEMAND, not baked -----------------------------
+# X11 libraries cost roughly 50-120MB, so the VNC stack (xvfb, xauth, x11vnc,
+# openbox, xterm) ships as a runtime script instead of an image layer.
+# At runtime: `desktop-install` (apt packages) then `start-desktop.sh`
+# (Xvfb → openbox → x11vnc).
+# SPIKE: Openbox (mouse-driven stacking WM) instead of awesome (tiling).
 
-# --- Firefox (from playwright; snap-free for containers) -------------------------
-# Ubuntu's `firefox` apt package is a snap transition stub that won't run in a
-# container, and download.mozilla.org has no aarch64 Linux tarball. Playwright
-# ships a full, arch-agnostic Firefox. We install the library here but do NOT
-# download the browser at build time — cdn.playwright.dev is notoriously flaky
-# in CI (ECONNRESET/400/self-signed). Run `playwright-install` once at runtime
-# to fetch firefox + the /usr/local/bin/firefox symlink.
-
-# --- crawl4ai + playwright (browser automation) -----------------------------------
-RUN pip3 install --no-cache-dir playwright crawl4ai \
-    && rm -rf /root/.cache /tmp/* /var/tmp/*
+# --- Browser automation: ON DEMAND, not baked --------------------------------------
+# playwright + crawl4ai pull hundreds of MB of Python deps, so they ship as a
+# runtime script instead of an image layer. At runtime: `crawl4ai-install`
+# (pip packages) then `playwright-install` (firefox binary + symlink).
+# Playwright's CDN is flaky in CI (ECONNRESET/400/self-signed), hence runtime.
 
 # --- Create non-root user `admin` --------------------------------------------
-# ubuntu:26.04 minimal image already ships a user at GID/UID 1000. If admin
-# doesn't exist yet, repurpose that user as `admin` (keeps UID/GID 1000 for
-# host mount compat); otherwise create admin normally.
+# debian:13-slim ships no UID 1000 user by default (unlike Ubuntu minimal), so
+# we normally create `admin` fresh; the repurpose branch stays for compat.
+# Keeps UID/GID 1000 for host mount compat; otherwise create admin normally.
 RUN set -eux; \
     if id "${USERNAME}" >/dev/null 2>&1; then \
         :; \
@@ -188,9 +171,11 @@ RUN curl -fsSL \
 # One transaction + cache purge: npm's _cacache (~200MB) must die in the SAME
 # layer or it still ships. Sourcemap (*.map) removal only affects debugging.
 # mkdir + npm config merged here to save one extra layer.
+# NOTE: claude-code is intentionally NOT baked (saves ~100-200MB); install it
+# on demand at runtime when needed.
 RUN mkdir -p "${NPM_CONFIG_PREFIX}" && npm config set prefix "${NPM_CONFIG_PREFIX}" \
     && npm install -g --no-fund --no-audit --no-update-notifier \
-        @anthropic-ai/claude-code opencode-ai@latest pnpm \
+        opencode-ai@latest pnpm \
     && npm cache clean --force \
     && find "${NPM_CONFIG_PREFIX}/lib/node_modules" -name '*.map' -delete \
     && rm -rf /tmp/* /var/tmp/*
@@ -205,7 +190,9 @@ COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=0755 bin/npg /usr/local/bin/npg
 COPY --chmod=0755 bin/start-desktop.sh /usr/local/bin/start-desktop.sh
 COPY --chmod=0755 bin/stop-desktop.sh /usr/local/bin/stop-desktop.sh
+COPY --chmod=0755 bin/desktop-install.sh /usr/local/bin/desktop-install
 COPY --chmod=0755 bin/playwright-install.sh /usr/local/bin/playwright-install
+COPY --chmod=0755 bin/crawl4ai-install.sh /usr/local/bin/crawl4ai-install
 
 # Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
 # Installed into the user home via `npg skills sync` (build + every start).
@@ -230,12 +217,13 @@ WORKDIR /workspace
 # No VOLUME: the container runs on its internal filesystem by default.
 # Users who want persistence add -v themselves (see README).
 
-RUN aoe --version && claude --version && opencode --version && npg commands >/dev/null \
+RUN aoe --version && opencode --version && npg commands >/dev/null \
     && rtk --version && ast-grep --version && yq --version && just --version \
     && gh --version && trafilatura --help >/dev/null \
-    && pnpm --version && awesome --version \
+    && pnpm --version \
     && command -v playwright-install \
-    && python3 -c "import playwright, crawl4ai"
+    && command -v crawl4ai-install \
+    && command -v desktop-install
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []
