@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 #
 # nanoPlayground — Instant, Fun & Agentic Playground for AI coding agents.
 # Ubuntu 26.04 LTS base. Runs as non-root user `admin`, not root.
@@ -25,22 +25,23 @@ ENV LANG=C.UTF-8 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
-# --- Enable universe ------------------------------------------------------------
+# --- Enable universe + base deps in ONE layer (still as root) --------------------
+# Combined on purpose: a separate `apt-get update` layer before the install
+# is throwaway work and an extra layer. Cache mounts keep /var/cache/apt and
+# /var/lib/apt out of the final layer for faster rebuilds without growing size.
 # The minimal ubuntu:26.04 container image ships only `main`. The desktop and
 # automation stack (xvfb, x11vnc, awesome, xterm, and friends) lives in
 # `universe`, so enable it across all sources before the first install.
-RUN sed -i 's/^Components: main$/Components: main universe/g' \
-        /etc/apt/sources.list.d/ubuntu.sources \
-    && apt-get update \
-    && rm -rf /var/lib/apt/lists/*
-
-# --- Base deps (still as root) ------------------------------------------------
 # Must-have (verified for Ubuntu 26.04): jq, fd, ctags (universal-ctags), bat,
 # delta, eza, sqlite3, python3 + pip. yq / ast-grep / just / gh (github-cli)
 # are NOT apt packages on Ubuntu (snap-only / unpackaged) — they come from
 # static binaries in the next step.
 # Nice-to-have: bat, delta, eza, sqlite3.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    sed -i 's/^Components: main$/Components: main universe/g' \
+        /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get install -y --no-install-recommends \
         bash \
         tmux \
         git \
@@ -100,14 +101,15 @@ RUN case "${TARGETARCH}" in \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VER}/gh_${GH_VER}_linux_${GH_T}.tar.gz" \
         | tar -xz -C /tmp \
     && mv "/tmp/gh_${GH_VER}_linux_${GH_T}/bin/gh" /usr/local/bin/gh \
-    && chmod +x /usr/local/bin/gh && gh --version
+    && chmod +x /usr/local/bin/gh && gh --version \
+    && rm -rf /tmp/* /var/tmp/*
 
 # --- rtk (Rust Token Killer, https://github.com/rtk-ai/rtk) ---------------------
 # Single static binary -> runs on Ubuntu. Installed system-wide
 # (NOT via install.sh, which targets ~/.local/bin, and NEVER via
 # `cargo install rtk` — that is a different crate).
 # TARGETARCH-aware (amd64/arm64) for multi-arch builds.
-ARG TARGETARCH
+# NOTE: ARG TARGETARCH declared once above is reused here (no re-declare needed).
 RUN case "${TARGETARCH}" in \
         amd64) RTK_TRIPLE="x86_64-unknown-linux-musl" ;; \
         arm64) RTK_TRIPLE="aarch64-unknown-linux-gnu" ;; \
@@ -116,18 +118,21 @@ RUN case "${TARGETARCH}" in \
     && RTK_VER="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/rtk-ai/rtk/releases/latest | sed 's#.*/##')" \
     && curl -fsSL "https://github.com/rtk-ai/rtk/releases/download/${RTK_VER}/rtk-${RTK_TRIPLE}.tar.gz" \
         | tar -xz -C /usr/local/bin \
-    && chmod +x /usr/local/bin/rtk && rtk --version
+    && chmod +x /usr/local/bin/rtk && rtk --version \
+    && rm -rf /tmp/* /var/tmp/* /root/.cache
 
 # --- trafilatura (https://trafilatura.readthedocs.io) --------------------------
 # Best-in-class HTML -> text/Markdown extractor. CLI: `trafilatura -u <URL>`.
 RUN pip3 install --no-cache-dir --no-compile trafilatura \
     && find /usr/lib/python* -type d -name '__pycache__' -prune -exec rm -rf {} + \
-    && rm -rf /root/.cache && trafilatura --help >/dev/null
+    && rm -rf /root/.cache /tmp/* /var/tmp/* && trafilatura --help >/dev/null
 
 # --- Remote desktop / VNC stack -------------------------------------------------
 # Headless X + a window manager, shared over VNC for native client apps
 # (bVNC, RealVNC Viewer). `start-desktop.sh` wires it all together at runtime.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
         xvfb \
         xauth \
         x11vnc \
@@ -146,7 +151,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # --- crawl4ai + playwright (browser automation) -----------------------------------
 RUN pip3 install --no-cache-dir playwright crawl4ai \
-    && rm -rf /root/.cache /tmp/*
+    && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 # --- Create non-root user `admin` --------------------------------------------
 # ubuntu:26.04 minimal image already ships a user at GID/UID 1000. If admin
@@ -165,17 +170,7 @@ RUN set -eux; \
     echo "${USERNAME} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${USERNAME}; \
     chmod 0440 /etc/sudoers.d/${USERNAME}
 
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY bin/npg /usr/local/bin/npg
-COPY bin/start-desktop.sh /usr/local/bin/start-desktop.sh
-COPY bin/playwright-install.sh /usr/local/bin/playwright-install
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/npg \
-    /usr/local/bin/start-desktop.sh /usr/local/bin/playwright-install
-
-# Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
-# Installed into the user home via `npg skills sync` (build + every start).
-COPY .opencode/skills /usr/share/nanoplayground/skills
-
+# Stable first: workspace dir owned by admin (rarely changes, keep high for cache).
 RUN mkdir -p /workspace && chown -R "${USER_UID}:${USER_GID}" /workspace
 
 USER ${USERNAME}
@@ -184,22 +179,40 @@ WORKDIR /home/${USERNAME}
 ENV PATH="/home/${USERNAME}/.local/bin:/home/${USERNAME}/.npm-global/bin:${PATH}" \
     NPM_CONFIG_PREFIX="/home/${USERNAME}/.npm-global"
 
-RUN mkdir -p "${NPM_CONFIG_PREFIX}" && npm config set prefix "${NPM_CONFIG_PREFIX}"
-
+# --- Heavy stable layers as admin (keep above volatile COPYs for cache reuse) ---
 RUN curl -fsSL \
       https://raw.githubusercontent.com/agent-of-empires/agent-of-empires/main/scripts/install.sh \
-      | bash
+      | bash \
+    && rm -rf /tmp/* /var/tmp/*
 
 # One transaction + cache purge: npm's _cacache (~200MB) must die in the SAME
 # layer or it still ships. Sourcemap (*.map) removal only affects debugging.
-RUN npm install -g --no-fund --no-audit --no-update-notifier \
+# mkdir + npm config merged here to save one extra layer.
+RUN mkdir -p "${NPM_CONFIG_PREFIX}" && npm config set prefix "${NPM_CONFIG_PREFIX}" \
+    && npm install -g --no-fund --no-audit --no-update-notifier \
         @anthropic-ai/claude-code opencode-ai@latest pnpm \
     && npm cache clean --force \
     && find "${NPM_CONFIG_PREFIX}/lib/node_modules" -name '*.map' -delete \
     && rm -rf /tmp/* /var/tmp/*
 
+# Stable admin dirs (empty dirs must exist for mounts; keep before volatile COPY).
 RUN mkdir -p /home/${USERNAME}/.agent-of-empires /home/${USERNAME}/.claude /home/${USERNAME}/.config/opencode
+
+# --- Volatile root COPYs LAST (as root) so bin/skills edits do NOT invalidate ---
+# --- the heavy npm/aoe layers above. COPY --chmod saves the extra chmod RUN. ---
+USER root
+COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=0755 bin/npg /usr/local/bin/npg
+COPY --chmod=0755 bin/start-desktop.sh /usr/local/bin/start-desktop.sh
+COPY --chmod=0755 bin/playwright-install.sh /usr/local/bin/playwright-install
+
+# Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
+# Installed into the user home via `npg skills sync` (build + every start).
+COPY .opencode/skills /usr/share/nanoplayground/skills
 COPY --chown=${USER_UID}:${USER_GID} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
+
+USER ${USERNAME}
+WORKDIR /home/${USERNAME}
 
 # Install skills + CLI helper for the default user (the entrypoint re-syncs
 # on every start so even mounted homes keep the skills).
@@ -207,10 +220,9 @@ RUN npg skills sync && npg commands >/dev/null
 
 # rtk setup for BOTH agents — verbose on purpose so the build log proves
 # registration. `rtk init --show` fails the build if hooks are missing.
-RUN rtk init -g --auto-patch && rtk init -g --opencode --auto-patch && rtk init --show
-
-# Cleaner diffs for agents: delta pager (git auto-disables it when not a TTY).
-RUN git config --global core.pager delta
+# Merged with git pager config to save one layer.
+RUN rtk init -g --auto-patch && rtk init -g --opencode --auto-patch && rtk init --show \
+    && git config --global core.pager delta
 
 WORKDIR /workspace
 
