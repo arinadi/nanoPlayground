@@ -199,6 +199,20 @@ COPY --chmod=0755 bin/crawl4ai-install.sh /usr/local/bin/crawl4ai-install
 COPY .opencode/skills /usr/share/nanoplayground/skills
 COPY --chown=${USER_UID}:${USER_GID} config/aoe-config.toml /home/${USERNAME}/.agent-of-empires/config.toml
 
+# System-wide shims for the admin-HOME CLIs (opencode from the npm prefix,
+# aoe from its install script). Both are only on PATH via the image ENV, so
+# runtimes that reset PATH (proot-distro login, `su -`, `env -i`, `-e PATH=`)
+# would report them as "not found". /usr/local/bin is on every default PATH;
+# /etc/profile.d covers login shells. The test -x checks fail the build
+# loudly if an install step above regresses.
+RUN set -eux; \
+    test -x "/home/${USERNAME}/.npm-global/bin/opencode"; \
+    AOE_BIN="$(command -v aoe)"; test -x "${AOE_BIN}"; \
+    ln -sfn "/home/${USERNAME}/.npm-global/bin/opencode" /usr/local/bin/opencode; \
+    ln -sfn "${AOE_BIN}" /usr/local/bin/aoe; \
+    echo 'export PATH="/home/${USERNAME}/.local/bin:/home/${USERNAME}/.npm-global/bin:$PATH"' > /etc/profile.d/nanoplayground.sh; \
+    chmod 0644 /etc/profile.d/nanoplayground.sh
+
 USER ${USERNAME}
 WORKDIR /home/${USERNAME}
 
@@ -223,7 +237,9 @@ RUN aoe --version && opencode --version && npg commands >/dev/null \
     && pnpm --version \
     && command -v playwright-install \
     && command -v crawl4ai-install \
-    && command -v desktop-install
+    && command -v desktop-install \
+    && test -x /usr/local/bin/opencode && test -x /usr/local/bin/aoe \
+    && /usr/local/bin/opencode --version && /usr/local/bin/aoe --version
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD []

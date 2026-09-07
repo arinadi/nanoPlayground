@@ -36,6 +36,14 @@ set -euo pipefail
 mkdir -p "${HOME}/.claude" "${HOME}/.config/opencode" \
     "${HOME}/.agent-of-empires" /workspace 2>/dev/null || true
 
+# Runtimes that override PATH (`docker run -e PATH=...`, some exec paths)
+# would hide the admin-HOME CLIs; re-prepend them if missing (idempotent).
+# (Bare-PATH runtimes are covered by the /usr/local/bin shims + profile.d.)
+case ":${PATH:-}:" in
+    *":${HOME}/.npm-global/bin:"*) ;;
+    *) export PATH="${HOME}/.local/bin:${HOME}/.npm-global/bin:${PATH:-}" ;;
+esac
+
 # Sync built-in skills into the user home (idempotent, cheap). Matters when
 # home is mounted from the host so build-time symlinks don't carry over.
 if command -v npg >/dev/null 2>&1; then
