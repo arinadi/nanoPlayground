@@ -204,6 +204,7 @@ USER root
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=0755 bin/npg /usr/local/bin/npg
 COPY --chmod=0755 bin/start-desktop.sh /usr/local/bin/start-desktop.sh
+COPY --chmod=0755 bin/stop-desktop.sh /usr/local/bin/stop-desktop.sh
 COPY --chmod=0755 bin/playwright-install.sh /usr/local/bin/playwright-install
 
 # Built-in skills (read-only defaults, omarchy-style /usr/share/nanoplayground).
