@@ -7,7 +7,7 @@
 #           --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g) \
 #           -t nanoplayground .
 
-FROM debian:13-slim
+FROM debian:13
 
 LABEL org.opencontainers.image.title="nanoPlayground" \
       org.opencontainers.image.description="Instant, fun & agentic playground: aoe TUI + Claude Code + OpenCode, runs with plain docker run" \
